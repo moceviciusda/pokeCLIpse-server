@@ -29,6 +29,11 @@ func main() {
 		log.Fatal("PORT is not found in the environment")
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET is not found in the environment")
+	}
+
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
 		log.Fatal("DB_URL is not found in the environment")
@@ -57,7 +62,9 @@ func main() {
 	v1Router := chi.NewRouter()
 	v1Router.Get("/healthz", handlerReadiness)
 	v1Router.Get("/error", handlerError)
+
 	v1Router.Post("/users", apiCfg.handlerCreateUser)
+	v1Router.Post("/login", apiCfg.handlerLogin)
 
 	router.Mount("/v1", v1Router)
 

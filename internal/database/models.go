@@ -14,5 +14,6 @@ type User struct {
 	ID        uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	Name      string
+	Username  string
+	Password  string
 }

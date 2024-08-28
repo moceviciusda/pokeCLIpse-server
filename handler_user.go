@@ -7,11 +7,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (apiCfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Name string `json:"name"`
+		Username string `json:"username"`
+		Password string `json:"password"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -22,12 +24,27 @@ func (apiCfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Reques
 		respondWithError(w, 400, "Error parsing JSON: "+err.Error())
 		return
 	}
+	if params.Username == "" || params.Password == "" {
+		respondWithError(w, 400, "Username and password are required")
+		return
+	}
+	user, err := apiCfg.DB.GetUserByUsername(r.Context(), params.Username)
+	if err == nil {
+		respondWithError(w, 400, "Username is already taken")
+		return
+	}
 
-	user, err := apiCfg.DB.CreateUser(r.Context(), database.CreateUserParams{
+	hash, err := bcrypt.GenerateFromPassword([]byte(params.Password), bcrypt.DefaultCost)
+	if err != nil {
+		respondWithError(w, 400, "Could not create user: "+err.Error())
+	}
+
+	user, err = apiCfg.DB.CreateUser(r.Context(), database.CreateUserParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
-		Name:      params.Name,
+		Username:  params.Username,
+		Password:  string(hash),
 	})
 	if err != nil {
 		respondWithError(w, 400, "Could not create user: "+err.Error())
