@@ -33,10 +33,10 @@ type Pokemon struct {
 }
 
 type User struct {
-	ID         uuid.UUID
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Username   string
-	Password   string
-	LocationID int32
+	ID             uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Username       string
+	Password       string
+	LocationOffset int32
 }

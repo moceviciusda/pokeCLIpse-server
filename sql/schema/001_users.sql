@@ -6,7 +6,7 @@ CREATE TABLE users (
     username TEXT NOT NULL,
     password TEXT NOT NULL,
 
-    location_id INT NOT NULL DEFAULT 1,
+    location_offset INT NOT NULL DEFAULT 0,
 
     UNIQUE (username)
 );

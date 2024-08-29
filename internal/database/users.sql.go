@@ -13,17 +13,18 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, created_at, updated_at, username, password)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, created_at, updated_at, username, password, location_id
+INSERT INTO users (id, created_at, updated_at, username, password, location_offset)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, created_at, updated_at, username, password, location_offset
 `
 
 type CreateUserParams struct {
-	ID        uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Username  string
-	Password  string
+	ID             uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Username       string
+	Password       string
+	LocationOffset int32
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -33,6 +34,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.UpdatedAt,
 		arg.Username,
 		arg.Password,
+		arg.LocationOffset,
 	)
 	var i User
 	err := row.Scan(
@@ -41,13 +43,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.Username,
 		&i.Password,
-		&i.LocationID,
+		&i.LocationOffset,
 	)
 	return i, err
 }
 
 const getUserById = `-- name: GetUserById :one
-SELECT id, created_at, updated_at, username, password, location_id FROM users WHERE id = $1
+SELECT id, created_at, updated_at, username, password, location_offset FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserById(ctx context.Context, id uuid.UUID) (User, error) {
@@ -59,13 +61,13 @@ func (q *Queries) GetUserById(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.UpdatedAt,
 		&i.Username,
 		&i.Password,
-		&i.LocationID,
+		&i.LocationOffset,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, created_at, updated_at, username, password, location_id FROM users WHERE username = $1
+SELECT id, created_at, updated_at, username, password, location_offset FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -77,7 +79,33 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.UpdatedAt,
 		&i.Username,
 		&i.Password,
-		&i.LocationID,
+		&i.LocationOffset,
+	)
+	return i, err
+}
+
+const updateUserLocation = `-- name: UpdateUserLocation :one
+UPDATE users
+    set location_offset = $2
+WHERE id = $1
+RETURNING id, created_at, updated_at, username, password, location_offset
+`
+
+type UpdateUserLocationParams struct {
+	ID             uuid.UUID
+	LocationOffset int32
+}
+
+func (q *Queries) UpdateUserLocation(ctx context.Context, arg UpdateUserLocationParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserLocation, arg.ID, arg.LocationOffset)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Username,
+		&i.Password,
+		&i.LocationOffset,
 	)
 	return i, err
 }

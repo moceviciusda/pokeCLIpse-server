@@ -10,21 +10,59 @@ import (
 )
 
 func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Request, user database.User) {
-	location, err := cfg.pokeapiClient.GetLocationArea(strconv.Itoa(int(user.LocationID)))
+	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
+
+	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
+	if err != nil {
+		respondWithError(w, 500, "Failed to get location options: "+err.Error())
+		return
+	}
+
+	var next, previous string
+
+	if areas.Next != "" {
+		nl, err := cfg.pokeapiClient.GetLocationAreas(areas.Next)
+		if err != nil {
+			respondWithError(w, 500, "Failed to get next location: "+err.Error())
+			return
+		}
+		next = nl.Results[0].Name
+	}
+
+	if areas.Previous != "" {
+		pl, err := cfg.pokeapiClient.GetLocationAreas(areas.Previous)
+		if err != nil {
+			respondWithError(w, 500, "Failed to get previous location: "+err.Error())
+			return
+		}
+		previous = pl.Results[0].Name
+	}
+
+	location, err := cfg.pokeapiClient.GetLocationArea(areas.Results[0].Name)
 	if err != nil {
 		respondWithError(w, 500, "Failed to get user location: "+err.Error())
 		return
 	}
 
 	type response struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		Next     string `json:"next"`
+		Previous string `json:"previous"`
 	}
 
-	respondWithJSON(w, 200, response{Name: location.Name})
+	respondWithJSON(w, 200, response{Name: location.Name, Next: next, Previous: previous})
 }
 
 func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Request, user database.User) {
-	location, err := cfg.pokeapiClient.GetLocationArea(strconv.Itoa(int(user.LocationID)))
+	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
+
+	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
+	if err != nil {
+		respondWithError(w, 500, "Failed to get location options: "+err.Error())
+		return
+	}
+
+	location, err := cfg.pokeapiClient.GetLocationArea(areas.Results[0].Name)
 	if err != nil {
 		respondWithError(w, 500, "Failed to get user location: "+err.Error())
 		return
@@ -71,6 +109,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 	res := struct {
 		Name           string `json:"name"`
+		Level          int    `json:"level"`
 		HP             int    `json:"hp"`
 		Attack         int    `json:"attack"`
 		Defense        int    `json:"defense"`
@@ -80,6 +119,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 	}{}
 
 	res.Name = pokemon.Name
+	res.Level = randomPokemon.Level
 
 	ivs := pokeutils.GenerateIVs()
 	res.HP = pokeutils.CalculateStat(pokemon.Stats[0].BaseStat, ivs.HP, randomPokemon.Level)
