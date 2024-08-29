@@ -67,7 +67,6 @@ func main() {
 
 	v1Router.Post("/users", apiCfg.handlerCreateUser)
 	v1Router.Post("/login", apiCfg.handlerLogin)
-	v1Router.Get("/parse-jwt", apiCfg.handlerparseJWT)
 
 	router.Mount("/v1", v1Router)
 
