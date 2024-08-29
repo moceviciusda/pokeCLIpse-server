@@ -9,6 +9,12 @@ import (
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
+type locationInfo struct {
+	Name     string `json:"name"`
+	Next     string `json:"next"`
+	Previous string `json:"previous"`
+}
+
 func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Request, user database.User) {
 	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
 
@@ -44,13 +50,77 @@ func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	type response struct {
-		Name     string `json:"name"`
-		Next     string `json:"next"`
-		Previous string `json:"previous"`
+	respondWithJSON(w, 200, locationInfo{Name: location.Name, Next: next, Previous: previous})
+}
+
+func (cfg *apiConfig) handlerNextLocation(w http.ResponseWriter, r *http.Request, user database.User) {
+	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
+
+	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
+	if err != nil {
+		respondWithError(w, 500, "Failed to get location options: "+err.Error())
+		return
 	}
 
-	respondWithJSON(w, 200, response{Name: location.Name, Next: next, Previous: previous})
+	if areas.Next == "" {
+		respondWithError(w, 400, "No next location")
+		return
+	}
+
+	location, err := cfg.pokeapiClient.GetLocationAreas(areas.Next)
+	if err != nil {
+		respondWithError(w, 500, "Failed to get next location: "+err.Error())
+		return
+	}
+
+	user.LocationOffset++
+	_, err = cfg.DB.UpdateUserLocation(r.Context(), database.UpdateUserLocationParams{
+		ID:             user.ID,
+		LocationOffset: user.LocationOffset,
+	})
+	if err != nil {
+		respondWithError(w, 500, "Failed to update user location: "+err.Error())
+		return
+	}
+
+	respondWithJSON(w, 200, struct {
+		Name string `json:"name"`
+	}{Name: location.Results[0].Name})
+}
+
+func (cfg *apiConfig) handlerPreviousLocation(w http.ResponseWriter, r *http.Request, user database.User) {
+	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
+
+	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
+	if err != nil {
+		respondWithError(w, 500, "Failed to get location options: "+err.Error())
+		return
+	}
+
+	if areas.Previous == "" {
+		respondWithError(w, 400, "No previous location")
+		return
+	}
+
+	location, err := cfg.pokeapiClient.GetLocationAreas(areas.Previous)
+	if err != nil {
+		respondWithError(w, 500, "Failed to get previous location: "+err.Error())
+		return
+	}
+
+	user.LocationOffset--
+	_, err = cfg.DB.UpdateUserLocation(r.Context(), database.UpdateUserLocationParams{
+		ID:             user.ID,
+		LocationOffset: user.LocationOffset,
+	})
+	if err != nil {
+		respondWithError(w, 500, "Failed to update user location: "+err.Error())
+		return
+	}
+
+	respondWithJSON(w, 200, struct {
+		Name string `json:"name"`
+	}{Name: location.Results[0].Name})
 }
 
 func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Request, user database.User) {
@@ -82,10 +152,17 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		minLevel := details.EncounterDetails[0].MinLevel
 		maxLevel := details.EncounterDetails[0].MaxLevel
 
+		var level int
+		if maxLevel > minLevel {
+			level = rand.Intn(maxLevel-minLevel) + minLevel
+		} else {
+			level = minLevel
+		}
+
 		encounterOptions = append(encounterOptions, encounterOption{
 			Name:          encounter.Pokemon.Name,
 			EncounterRate: details.MaxChance,
-			Level:         rand.Intn(maxLevel-minLevel) + minLevel,
+			Level:         level,
 		})
 		totalEncounterRate += details.MaxChance
 	}
