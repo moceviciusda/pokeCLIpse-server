@@ -10,8 +10,8 @@ CREATE TABLE pokemon (
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX ON pokemon (name, owner_id);
 CREATE INDEX ON pokemon (owner_id);
+CREATE UNIQUE INDEX ON pokemon (name, owner_id);
 
 -- +goose Down
 DROP TABLE pokemon;

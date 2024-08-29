@@ -72,6 +72,9 @@ func main() {
 	v1Router.Post("/users", apiCfg.handlerCreateUser)
 	v1Router.Post("/login", apiCfg.handlerLogin)
 
+	v1Router.Get("/location", apiCfg.middlewareAuth(apiCfg.hadlerGetUserLocation))
+	v1Router.Get("/location/search", apiCfg.middlewareAuth(apiCfg.handlerSearchForPokemon))
+
 	router.Mount("/v1", v1Router)
 
 	srv := &http.Server{

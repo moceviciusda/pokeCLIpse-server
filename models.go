@@ -8,11 +8,11 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
+	ID         uuid.UUID `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	Username   string    `json:"username"`
+	LocationID int       `json:"location_id"`
 }
 
 func databaseUserToUser(dbUser database.User) User {
@@ -21,6 +21,6 @@ func databaseUserToUser(dbUser database.User) User {
 		dbUser.CreatedAt,
 		dbUser.UpdatedAt,
 		dbUser.Username,
-		dbUser.Password,
+		int(dbUser.LocationID),
 	}
 }

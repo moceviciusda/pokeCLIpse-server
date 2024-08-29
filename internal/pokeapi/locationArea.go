@@ -42,8 +42,8 @@ func (c *Client) GetLocationAreas(locationUrl string) (LocationAreasResponse, er
 	return locations, nil
 }
 
-func (c *Client) GetLocationArea(name string) (LocationAreaResponse, error) {
-	url := baseURL + "/location-area/" + name
+func (c *Client) GetLocationArea(nameOrId string) (LocationAreaResponse, error) {
+	url := baseURL + "/location-area/" + nameOrId
 
 	body, ok := c.cache.Get(url)
 	if !ok {

@@ -10,10 +10,33 @@ import (
 	"github.com/google/uuid"
 )
 
-type User struct {
+type Iv struct {
+	ID             uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Hp             int32
+	Attack         int32
+	Defense        int32
+	SpecialAttack  int32
+	SpecialDefense int32
+	Speed          int32
+}
+
+type Pokemon struct {
 	ID        uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	Username  string
-	Password  string
+	Name      string
+	Level     int32
+	IvsID     uuid.UUID
+	OwnerID   uuid.UUID
+}
+
+type User struct {
+	ID         uuid.UUID
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Username   string
+	Password   string
+	LocationID int32
 }
