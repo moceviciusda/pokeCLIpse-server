@@ -5,18 +5,21 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
+	"github.com/moceviciusda/pokeCLIpse-server/internal/pokeapi"
 
 	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
-	DB        *database.Queries
-	jwtSecret string
+	DB            *database.Queries
+	jwtSecret     string
+	pokeapiClient pokeapi.Client
 }
 
 func main() {
@@ -46,8 +49,9 @@ func main() {
 	}
 
 	apiCfg := apiConfig{
-		DB:        database.New(conn),
-		jwtSecret: jwtSecret,
+		DB:            database.New(conn),
+		jwtSecret:     jwtSecret,
+		pokeapiClient: pokeapi.NewClient(5*time.Minute, 5*time.Second),
 	}
 
 	router := chi.NewRouter()

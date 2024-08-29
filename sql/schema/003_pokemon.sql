@@ -6,7 +6,7 @@ CREATE TABLE pokemon (
     name TEXT NOT NULL,
     level INT NOT NULL,
     
-    stats_id UUID NOT NULL REFERENCES stats(id) ON DELETE CASCADE,
+    ivs_id UUID NOT NULL REFERENCES ivs(id) ON DELETE CASCADE,
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );
 
