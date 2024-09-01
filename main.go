@@ -78,6 +78,7 @@ func main() {
 	v1Router.Get("/location/search", apiCfg.middlewareAuth(apiCfg.handlerSearchForPokemon))
 
 	v1Router.Post("/pokemon", apiCfg.middlewareAuth(apiCfg.handlerCreatePokemon))
+	v1Router.Get("/pokemon/party", apiCfg.middlewareAuth(apiCfg.handlerGetPokemonParty))
 
 	router.Mount("/v1", v1Router)
 

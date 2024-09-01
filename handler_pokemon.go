@@ -101,3 +101,55 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 
 	respondWithJSON(w, 201, pokemon)
 }
+
+func (cfg *apiConfig) handlerGetPokemonParty(w http.ResponseWriter, r *http.Request, user database.User) {
+	pokemons, err := cfg.DB.GetPokemonPartyByOwnerID(r.Context(), user.ID)
+	if err != nil {
+		log.Println("Error getting pokemon: " + err.Error())
+		respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
+		return
+	}
+
+	pokemonList := make([]pokeutils.Pokemon, 0, len(pokemons))
+	for _, pokemon := range pokemons {
+		p, err := cfg.pokeapiClient.GetPokemon(pokemon.Name)
+		if err != nil {
+			log.Println("Error getting pokemon: " + err.Error())
+			respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
+			return
+		}
+
+		ivs, err := cfg.DB.GetIVs(r.Context(), pokemon.IvsID)
+		if err != nil {
+			log.Println("Error getting IVs: " + err.Error())
+			respondWithError(w, 500, "Failed to get IVs: "+err.Error())
+			return
+		}
+
+		pBaseStats := pokeutils.Stats{
+			Hp:             p.Stats[0].BaseStat,
+			Attack:         p.Stats[1].BaseStat,
+			Defense:        p.Stats[2].BaseStat,
+			SpecialAttack:  p.Stats[3].BaseStat,
+			SpecialDefense: p.Stats[4].BaseStat,
+			Speed:          p.Stats[5].BaseStat,
+		}
+
+		pokemonList = append(pokemonList, pokeutils.Pokemon{
+			ID:    pokemon.ID.String(),
+			Name:  p.Name,
+			Level: int(pokemon.Level),
+			Shiny: pokemon.Shiny,
+			Stats: pokeutils.CalculateStats(pBaseStats, pokeutils.IVs{
+				Hp:             int(ivs.Hp),
+				Attack:         int(ivs.Attack),
+				Defense:        int(ivs.Defense),
+				SpecialAttack:  int(ivs.SpecialAttack),
+				SpecialDefense: int(ivs.SpecialDefense),
+				Speed:          int(ivs.Speed),
+			}, int(pokemon.Level)),
+		})
+	}
+
+	respondWithJSON(w, 200, pokemonList)
+}

@@ -1,6 +1,9 @@
 package pokeutils
 
-import "math/rand"
+import (
+	"fmt"
+	"math/rand"
+)
 
 const (
 	IconNormal   = "♟️"
@@ -22,6 +25,66 @@ const (
 	IconDark     = "🌙"
 	IconFairy    = "✨"
 )
+
+var Starters = []string{
+	"Bulbasaur",
+	"Charmander",
+	"Squirtle",
+	"Chikorita",
+	"Cyndaquil",
+	"Totodile",
+	"Treecko",
+	"Torchic",
+	"Mudkip",
+	"Turtwig",
+	"Chimchar",
+	"Piplup",
+	"Snivy",
+	"Tepig",
+	"Oshawott",
+	"Chespin",
+	"Fennekin",
+	"Froakie",
+	"Rowlet",
+	"Litten",
+	"Popplio",
+	"Grookey",
+	"Scorbunny",
+	"Sobble",
+	"Sprigatito",
+	"Fuecoco",
+	"Quaxly",
+}
+
+var StarterTypeMap = map[string]string{
+	"Bulbasaur":  IconGrass + IconPoison,
+	"Charmander": IconFire,
+	"Squirtle":   IconWater,
+	"Chikorita":  IconGrass,
+	"Cyndaquil":  IconFire,
+	"Totodile":   IconWater,
+	"Treecko":    IconGrass,
+	"Torchic":    IconFire,
+	"Mudkip":     IconWater,
+	"Turtwig":    IconGrass,
+	"Chimchar":   IconFire,
+	"Piplup":     IconWater,
+	"Snivy":      IconGrass,
+	"Tepig":      IconFire,
+	"Oshawott":   IconWater,
+	"Chespin":    IconGrass,
+	"Fennekin":   IconFire,
+	"Froakie":    IconWater,
+	"Rowlet":     IconGrass + IconFlying,
+	"Litten":     IconFire,
+	"Popplio":    IconWater,
+	"Grookey":    IconGrass,
+	"Scorbunny":  IconFire,
+	"Sobble":     IconWater,
+	"Sprigatito": IconGrass,
+	"Fuecoco":    IconFire,
+	"Quaxly":     IconWater,
+}
 
 func GenerateIVs() IVs {
 	return IVs{
@@ -51,4 +114,11 @@ func CalculateStats(baseStats Stats, ivs IVs, level int) Stats {
 		SpecialDefense: CalculateStat(baseStats.SpecialDefense, ivs.SpecialDefense, level),
 		Speed:          CalculateStat(baseStats.Speed, ivs.Speed, level),
 	}
+}
+
+func (s Stats) String() string {
+	return fmt.Sprintf(
+		`	HP: %d			Speed: %d
+	Attack: %d		Special Attack: %d
+	Defense: %d		Special Defense: %d`, s.Hp, s.Speed, s.Attack, s.SpecialAttack, s.Defense, s.SpecialDefense)
 }

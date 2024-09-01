@@ -74,12 +74,12 @@ func (q *Queries) GetPokemon(ctx context.Context, id uuid.UUID) (Pokemon, error)
 	return i, err
 }
 
-const getUsersPokemon = `-- name: GetUsersPokemon :many
-SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1
+const getPokemonPartyByOwnerID = `-- name: GetPokemonPartyByOwnerID :many
+SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1 ORDER BY updated_at DESC
 `
 
-func (q *Queries) GetUsersPokemon(ctx context.Context, ownerID uuid.UUID) ([]Pokemon, error) {
-	rows, err := q.db.QueryContext(ctx, getUsersPokemon, ownerID)
+func (q *Queries) GetPokemonPartyByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]Pokemon, error) {
+	rows, err := q.db.QueryContext(ctx, getPokemonPartyByOwnerID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +96,70 @@ func (q *Queries) GetUsersPokemon(ctx context.Context, ownerID uuid.UUID) ([]Pok
 			&i.Shiny,
 			&i.IvsID,
 			&i.OwnerID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPokemonWithIvsByOwnerID = `-- name: GetPokemonWithIvsByOwnerID :many
+SELECT 
+    p.id,
+    p.name,
+    p.level,
+    p.shiny,
+    i.hp AS ivs_hp,
+    i.attack AS ivs_attack,
+    i.defense AS ivs_defense,
+    i.special_attack AS ivs_special_attack,
+    i.special_defense AS ivs_special_defense,
+    i.speed AS ivs_speed
+FROM pokemon p
+JOIN ivs i ON p.ivs_id = i.id
+WHERE p.owner_id = $1
+`
+
+type GetPokemonWithIvsByOwnerIDRow struct {
+	ID                uuid.UUID
+	Name              string
+	Level             int32
+	Shiny             bool
+	IvsHp             int32
+	IvsAttack         int32
+	IvsDefense        int32
+	IvsSpecialAttack  int32
+	IvsSpecialDefense int32
+	IvsSpeed          int32
+}
+
+func (q *Queries) GetPokemonWithIvsByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]GetPokemonWithIvsByOwnerIDRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPokemonWithIvsByOwnerID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPokemonWithIvsByOwnerIDRow
+	for rows.Next() {
+		var i GetPokemonWithIvsByOwnerIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Level,
+			&i.Shiny,
+			&i.IvsHp,
+			&i.IvsAttack,
+			&i.IvsDefense,
+			&i.IvsSpecialAttack,
+			&i.IvsSpecialDefense,
+			&i.IvsSpeed,
 		); err != nil {
 			return nil, err
 		}
