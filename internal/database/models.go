@@ -28,6 +28,7 @@ type Pokemon struct {
 	UpdatedAt time.Time
 	Name      string
 	Level     int32
+	Shiny     bool
 	IvsID     uuid.UUID
 	OwnerID   uuid.UUID
 }

@@ -77,6 +77,8 @@ func main() {
 	v1Router.Put("/location/previous", apiCfg.middlewareAuth(apiCfg.handlerPreviousLocation))
 	v1Router.Get("/location/search", apiCfg.middlewareAuth(apiCfg.handlerSearchForPokemon))
 
+	v1Router.Post("/pokemon", apiCfg.middlewareAuth(apiCfg.handlerCreatePokemon))
+
 	router.Mount("/v1", v1Router)
 
 	srv := &http.Server{

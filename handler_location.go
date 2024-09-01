@@ -178,33 +178,28 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	pokemon, err := cfg.pokeapiClient.GetPokemon(randomPokemon.Name)
+	p, err := cfg.pokeapiClient.GetPokemon(randomPokemon.Name)
 	if err != nil {
 		respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
 		return
 	}
 
-	res := struct {
-		Name           string `json:"name"`
-		Level          int    `json:"level"`
-		HP             int    `json:"hp"`
-		Attack         int    `json:"attack"`
-		Defense        int    `json:"defense"`
-		SpecialAttack  int    `json:"special_attack"`
-		SpecialDefense int    `json:"special_defense"`
-		Speed          int    `json:"speed"`
-	}{}
+	pBaseStats := pokeutils.Stats{
+		Hp:             p.Stats[0].BaseStat,
+		Attack:         p.Stats[1].BaseStat,
+		Defense:        p.Stats[2].BaseStat,
+		SpecialAttack:  p.Stats[3].BaseStat,
+		SpecialDefense: p.Stats[4].BaseStat,
+		Speed:          p.Stats[5].BaseStat,
+	}
 
-	res.Name = pokemon.Name
-	res.Level = randomPokemon.Level
+	pokemon := pokeutils.Pokemon{
+		ID:    "",
+		Name:  p.Name,
+		Level: randomPokemon.Level,
+		Shiny: pokeutils.IsShiny(),
+		Stats: pokeutils.CalculateStats(pBaseStats, pokeutils.GenerateIVs(), randomPokemon.Level),
+	}
 
-	ivs := pokeutils.GenerateIVs()
-	res.HP = pokeutils.CalculateStat(pokemon.Stats[0].BaseStat, ivs.HP, randomPokemon.Level)
-	res.Attack = pokeutils.CalculateStat(pokemon.Stats[1].BaseStat, ivs.Attack, randomPokemon.Level)
-	res.Defense = pokeutils.CalculateStat(pokemon.Stats[2].BaseStat, ivs.Defense, randomPokemon.Level)
-	res.SpecialAttack = pokeutils.CalculateStat(pokemon.Stats[3].BaseStat, ivs.SpecialAttack, randomPokemon.Level)
-	res.SpecialDefense = pokeutils.CalculateStat(pokemon.Stats[4].BaseStat, ivs.SpecialDefense, randomPokemon.Level)
-	res.Speed = pokeutils.CalculateStat(pokemon.Stats[5].BaseStat, ivs.Speed, randomPokemon.Level)
-
-	respondWithJSON(w, 200, res)
+	respondWithJSON(w, 200, pokemon)
 }

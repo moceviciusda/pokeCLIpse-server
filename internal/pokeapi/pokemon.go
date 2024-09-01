@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 func (c *Client) GetPokemon(name string) (PokemonResponse, error) {
-	url := baseURL + "/pokemon/" + name
-
+	url := baseURL + "/pokemon/" + strings.ToLower(name)
 	body, ok := c.cache.Get(url)
 	if !ok {
 		res, err := c.httpClient.Get(url)

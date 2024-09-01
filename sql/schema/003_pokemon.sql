@@ -5,13 +5,13 @@ CREATE TABLE pokemon (
     updated_at TIMESTAMP NOT NULL,
     name TEXT NOT NULL,
     level INT NOT NULL,
+    shiny BOOLEAN NOT NULL,
     
-    ivs_id UUID NOT NULL REFERENCES ivs(id) ON DELETE CASCADE,
-    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-);
+    ivs_id UUID NOT NULL UNIQUE REFERENCES ivs(id) ON DELETE CASCADE,
+    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-CREATE INDEX ON pokemon (owner_id);
-CREATE UNIQUE INDEX ON pokemon (name, owner_id);
+    UNIQUE (name, owner_id)
+);
 
 -- +goose Down
 DROP TABLE pokemon;
