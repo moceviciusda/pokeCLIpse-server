@@ -28,7 +28,7 @@ func (apiCfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Reques
 		respondWithError(w, 400, "Username and password are required")
 		return
 	}
-	user, err := apiCfg.DB.GetUserByUsername(r.Context(), params.Username)
+	_, err = apiCfg.DB.GetUserByUsername(r.Context(), params.Username)
 	if err == nil {
 		respondWithError(w, 400, "Username is already taken")
 		return
@@ -39,7 +39,7 @@ func (apiCfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Reques
 		respondWithError(w, 400, "Could not create user: "+err.Error())
 	}
 
-	user, err = apiCfg.DB.CreateUser(r.Context(), database.CreateUserParams{
+	user, err := apiCfg.DB.CreateUser(r.Context(), database.CreateUserParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),

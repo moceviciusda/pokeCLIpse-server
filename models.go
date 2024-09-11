@@ -35,14 +35,14 @@ type Pokemon struct {
 	Shiny     bool      `json:"shiny"`
 }
 
-func databasePokemonToPokemon(dbPokemon database.Pokemon) Pokemon {
-	return Pokemon{
-		dbPokemon.ID,
-		dbPokemon.CreatedAt,
-		dbPokemon.UpdatedAt,
-		dbPokemon.OwnerID,
-		dbPokemon.Name,
-		dbPokemon.Level,
-		dbPokemon.Shiny,
-	}
-}
+// func databasePokemonToPokemon(dbPokemon database.Pokemon) Pokemon {
+// 	return Pokemon{
+// 		dbPokemon.ID,
+// 		dbPokemon.CreatedAt,
+// 		dbPokemon.UpdatedAt,
+// 		dbPokemon.OwnerID,
+// 		dbPokemon.Name,
+// 		dbPokemon.Level,
+// 		dbPokemon.Shiny,
+// 	}
+// }
