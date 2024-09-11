@@ -1,10 +1,12 @@
 package main
 
 import (
+	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
 
+	"github.com/gorilla/websocket"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
@@ -20,6 +22,7 @@ func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Reque
 
 	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
 	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " location options: " + err.Error())
 		respondWithError(w, 500, "Failed to get location options: "+err.Error())
 		return
 	}
@@ -29,6 +32,7 @@ func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Reque
 	if areas.Next != "" {
 		nl, err := cfg.pokeapiClient.GetLocationAreas(areas.Next)
 		if err != nil {
+			log.Println("Failed to get user: " + user.Username + " next location: " + err.Error())
 			respondWithError(w, 500, "Failed to get next location: "+err.Error())
 			return
 		}
@@ -38,6 +42,7 @@ func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Reque
 	if areas.Previous != "" {
 		pl, err := cfg.pokeapiClient.GetLocationAreas(areas.Previous)
 		if err != nil {
+			log.Println("Failed to get user: " + user.Username + " previous location: " + err.Error())
 			respondWithError(w, 500, "Failed to get previous location: "+err.Error())
 			return
 		}
@@ -46,6 +51,7 @@ func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Reque
 
 	location, err := cfg.pokeapiClient.GetLocationArea(areas.Results[0].Name)
 	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " location: " + err.Error())
 		respondWithError(w, 500, "Failed to get user location: "+err.Error())
 		return
 	}
@@ -58,6 +64,7 @@ func (cfg *apiConfig) handlerNextLocation(w http.ResponseWriter, r *http.Request
 
 	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
 	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " location options: " + err.Error())
 		respondWithError(w, 500, "Failed to get location options: "+err.Error())
 		return
 	}
@@ -69,6 +76,7 @@ func (cfg *apiConfig) handlerNextLocation(w http.ResponseWriter, r *http.Request
 
 	location, err := cfg.pokeapiClient.GetLocationAreas(areas.Next)
 	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " next location: " + err.Error())
 		respondWithError(w, 500, "Failed to get next location: "+err.Error())
 		return
 	}
@@ -79,6 +87,7 @@ func (cfg *apiConfig) handlerNextLocation(w http.ResponseWriter, r *http.Request
 		LocationOffset: user.LocationOffset,
 	})
 	if err != nil {
+		log.Println("Failed to update user: " + user.Username + " location: " + err.Error())
 		respondWithError(w, 500, "Failed to update user location: "+err.Error())
 		return
 	}
@@ -93,6 +102,7 @@ func (cfg *apiConfig) handlerPreviousLocation(w http.ResponseWriter, r *http.Req
 
 	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
 	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " location options: " + err.Error())
 		respondWithError(w, 500, "Failed to get location options: "+err.Error())
 		return
 	}
@@ -104,6 +114,7 @@ func (cfg *apiConfig) handlerPreviousLocation(w http.ResponseWriter, r *http.Req
 
 	location, err := cfg.pokeapiClient.GetLocationAreas(areas.Previous)
 	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " previous location: " + err.Error())
 		respondWithError(w, 500, "Failed to get previous location: "+err.Error())
 		return
 	}
@@ -114,6 +125,7 @@ func (cfg *apiConfig) handlerPreviousLocation(w http.ResponseWriter, r *http.Req
 		LocationOffset: user.LocationOffset,
 	})
 	if err != nil {
+		log.Println("Failed to update user: " + user.Username + " location: " + err.Error())
 		respondWithError(w, 500, "Failed to update user location: "+err.Error())
 		return
 	}
@@ -124,17 +136,34 @@ func (cfg *apiConfig) handlerPreviousLocation(w http.ResponseWriter, r *http.Req
 }
 
 func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Request, user database.User) {
+	log.Println("Websocket connection with user: " + user.Username + " established")
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Failed to upgrade connection: " + err.Error())
+		return
+	}
+
+	defer conn.Close()
+
 	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
 
 	areas, err := cfg.pokeapiClient.GetLocationAreas(url)
 	if err != nil {
-		respondWithError(w, 500, "Failed to get location options: "+err.Error())
+		log.Println("Failed to get user: " + user.Username + " location options: " + err.Error())
+		conn.WriteJSON(errResponse{Error: "Failed to get location options: " + err.Error()})
 		return
 	}
 
 	location, err := cfg.pokeapiClient.GetLocationArea(areas.Results[0].Name)
 	if err != nil {
-		respondWithError(w, 500, "Failed to get user location: "+err.Error())
+		log.Println("Failed to get user: " + user.Username + " location: " + err.Error())
+		conn.WriteJSON(errResponse{Error: "Failed to get user location: " + err.Error()})
 		return
 	}
 
@@ -180,7 +209,8 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 	p, err := cfg.pokeapiClient.GetPokemon(randomPokemon.Name)
 	if err != nil {
-		respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
+		log.Println("Failed to get user: " + user.Username + " pokemon: " + err.Error())
+		conn.WriteJSON(errResponse{Error: "Failed to get pokemon: " + err.Error()})
 		return
 	}
 
@@ -201,5 +231,5 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		Stats: pokeutils.CalculateStats(pBaseStats, pokeutils.GenerateIVs(), randomPokemon.Level),
 	}
 
-	respondWithJSON(w, 200, pokemon)
+	conn.WriteJSON(pokemon)
 }
