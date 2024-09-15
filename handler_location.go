@@ -226,6 +226,10 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 	moves := make([]pokeutils.Move, 0, len(p.Moves))
 	for _, move := range p.Moves {
+		if move.VersionGroupDetails[0].LevelLearnedAt > randomPokemon.Level {
+			continue
+		}
+
 		m, err := cfg.pokeapiClient.GetMove(move.Move.Name)
 		if err != nil {
 			log.Println("Failed to get user: " + user.Username + " move: " + err.Error())
@@ -237,6 +241,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			Name:         m.Name,
 			Accuracy:     m.Accuracy,
 			Power:        m.Power,
+			PP:           m.Pp,
 			Type:         m.Type.Name,
 			DamageClass:  m.DamageClass.Name,
 			EffectChance: m.EffectChance,
@@ -263,7 +268,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		Name:    user.Username,
 		Pokemon: []pokeutils.Pokemon{pokemon},
 	}, pokebattle.Trainer{
-		Name:    "Wild " + p.Name,
+		Name:    "Wild",
 		Pokemon: []pokeutils.Pokemon{pokemon},
 	})
 

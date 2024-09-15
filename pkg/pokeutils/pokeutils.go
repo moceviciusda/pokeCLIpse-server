@@ -124,7 +124,7 @@ func (s Stats) String() string {
 	Defense: %d		Special Defense: %d`, s.Hp, s.Speed, s.Attack, s.SpecialAttack, s.Defense, s.SpecialDefense)
 }
 
-func CalculateDamage(attacker, defender Pokemon, move Move) int {
+func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourText string) {
 	var ad float64
 	if move.DamageClass == "physical" {
 		ad = float64(attacker.Stats.Attack) / float64(defender.Stats.Defense)
@@ -146,13 +146,22 @@ func CalculateDamage(attacker, defender Pokemon, move Move) int {
 
 	var typeEffectiveness float64 = 1
 	for _, t := range defender.Types {
-		typeEffectiveness *= TypeEffectiveness(move.Type, t)
+		te := TypeEffectiveness(move.Type, t)
+		typeEffectiveness *= te
+		switch te {
+		case 0:
+			flavourText = "It doesn't affect " + defender.Name + "..."
+		case 0.5:
+			flavourText = "It's not very effective..."
+		case 2:
+			flavourText = "It's super effective!"
+		}
 	}
 
 	damage = damage * stab * typeEffectiveness
 	log.Println("Damage after modifiers: ", damage)
 
-	return int(damage)
+	return int(damage), flavourText
 }
 
 func TypeEffectiveness(moveType, targetType string) float64 {

@@ -22,6 +22,7 @@ type Move struct {
 	Name         string `json:"name"`
 	Accuracy     int    `json:"accuracy"`
 	Power        int    `json:"power"`
+	PP           int    `json:"pp"`
 	Type         string `json:"type"`
 	DamageClass  string `json:"damage_class"`
 	EffectChance int    `json:"effect_chance"`
