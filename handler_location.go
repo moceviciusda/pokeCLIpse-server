@@ -273,7 +273,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 	battle := pokebattle.NewBattle(pokebattle.Trainer{
 		Name:    user.Username,
-		Pokemon: []pokeutils.Pokemon{pokemon},
+		Pokemon: []pokeutils.Pokemon{pokeutils.Pikachu},
 	}, pokebattle.Trainer{
 		Name:    "Wild",
 		Pokemon: []pokeutils.Pokemon{pokemon},
@@ -283,5 +283,4 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 	battle.Run()
 
-	conn.Close()
 }

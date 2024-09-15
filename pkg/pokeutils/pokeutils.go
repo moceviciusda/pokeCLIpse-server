@@ -3,7 +3,33 @@ package pokeutils
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 )
+
+var Pikachu = Pokemon{
+	Name:  "Pikachu",
+	Types: []string{"electric"},
+	Level: 5,
+	Stats: Stats{
+		Hp:             35,
+		Attack:         55,
+		Defense:        40,
+		SpecialAttack:  50,
+		SpecialDefense: 50,
+		Speed:          90,
+	},
+	Moves: []Move{
+		{
+			Name:        "Thunder Shock",
+			Accuracy:    100,
+			Power:       40,
+			PP:          30,
+			Type:        "electric",
+			DamageClass: "special",
+			Effect:      "paralyze",
+		},
+	},
+}
 
 const (
 	IconNormal   = "♟️"
@@ -147,14 +173,17 @@ func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourTex
 	for _, t := range defender.Types {
 		te := TypeEffectiveness(move.Type, t)
 		typeEffectiveness *= te
-		switch te {
-		case 0:
-			flavourText = "It doesn't affect " + defender.Name + "..."
-		case 0.5:
-			flavourText = "It's not very effective..."
-		case 2:
-			flavourText = "It's super effective!"
-		}
+
+	}
+	switch typeEffectiveness {
+	case 0:
+		flavourText = "It doesn't affect " + defender.Name + "..."
+	case 0.5:
+		flavourText = "It's not very effective..."
+	case 2:
+		flavourText = "It's super effective!"
+	case 4:
+		flavourText = "It's ultra effective!"
 	}
 
 	damage = damage * stab * typeEffectiveness
@@ -165,163 +194,166 @@ func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourTex
 
 func TypeEffectiveness(moveType, targetType string) float64 {
 	typeChart := map[string]map[string]float64{
-		"Normal": {
-			"Rock":  0.5,
-			"Ghost": 0,
-			"Steel": 0.5,
+		"normal": {
+			"rock":  0.5,
+			"ghost": 0,
+			"steel": 0.5,
 		},
-		"Fire": {
-			"Fire":   0.5,
-			"Water":  0.5,
-			"Grass":  2,
-			"Ice":    2,
-			"Bug":    2,
-			"Rock":   0.5,
-			"Dragon": 0.5,
-			"Steel":  2,
+		"fire": {
+			"fire":   0.5,
+			"water":  0.5,
+			"grass":  2,
+			"ice":    2,
+			"bug":    2,
+			"rock":   0.5,
+			"dragon": 0.5,
+			"steel":  2,
 		},
-		"Water": {
-			"Fire":   2,
-			"Water":  0.5,
-			"Grass":  0.5,
-			"Ground": 2,
-			"Rock":   2,
-			"Dragon": 0.5,
+		"water": {
+			"fire":   2,
+			"water":  0.5,
+			"grass":  0.5,
+			"ground": 2,
+			"rock":   2,
+			"dragon": 0.5,
 		},
-		"Electric": {
-			"Water":    2,
-			"Electric": 0.5,
-			"Grass":    0.5,
-			"Ground":   0,
-			"Flying":   2,
-			"Dragon":   0.5,
+		"electric": {
+			"water":    2,
+			"electric": 0.5,
+			"grass":    0.5,
+			"ground":   0,
+			"flying":   2,
+			"dragon":   0.5,
 		},
-		"Grass": {
-			"Fire":   0.5,
-			"Water":  2,
-			"Grass":  0.5,
-			"Poison": 0.5,
-			"Ground": 2,
-			"Flying": 0.5,
-			"Bug":    0.5,
-			"Rock":   2,
-			"Dragon": 0.5,
-			"Steel":  0.5,
+		"grass": {
+			"fire":   0.5,
+			"water":  2,
+			"grass":  0.5,
+			"poison": 0.5,
+			"ground": 2,
+			"flying": 0.5,
+			"bug":    0.5,
+			"rock":   2,
+			"dragon": 0.5,
+			"steel":  0.5,
 		},
-		"Ice": {
-			"Fire":   0.5,
-			"Water":  0.5,
-			"Grass":  2,
-			"Ice":    0.5,
-			"Ground": 2,
-			"Flying": 2,
-			"Dragon": 2,
-			"Steel":  0.5,
+		"ice": {
+			"fire":   0.5,
+			"water":  0.5,
+			"grass":  2,
+			"ice":    0.5,
+			"ground": 2,
+			"flying": 2,
+			"dragon": 2,
+			"steel":  0.5,
 		},
-		"Fighting": {
-			"Normal":  2,
-			"Ice":     2,
-			"Poison":  0.5,
-			"Flying":  0.5,
-			"Psychic": 0.5,
-			"Bug":     0.5,
-			"Rock":    2,
-			"Ghost":   0,
-			"Dark":    2,
-			"Steel":   2,
-			"Fairy":   0.5,
+		"fighting": {
+			"normal":  2,
+			"ice":     2,
+			"poison":  0.5,
+			"flying":  0.5,
+			"psychic": 0.5,
+			"bug":     0.5,
+			"rock":    2,
+			"ghost":   0,
+			"dark":    2,
+			"steel":   2,
+			"fairy":   0.5,
 		},
-		"Poison": {
-			"Grass":  2,
-			"Poison": 0.5,
-			"Ground": 0.5,
-			"Rock":   0.5,
-			"Ghost":  0.5,
-			"Steel":  0,
-			"Fairy":  2,
+		"poison": {
+			"grass":  2,
+			"poison": 0.5,
+			"ground": 0.5,
+			"rock":   0.5,
+			"ghost":  0.5,
+			"steel":  0,
+			"fairy":  2,
 		},
-		"Ground": {
-			"Fire":     2,
-			"Electric": 2,
-			"Grass":    0.5,
-			"Poison":   2,
-			"Flying":   0,
-			"Bug":      0.5,
-			"Rock":     2,
-			"Steel":    2,
+		"ground": {
+			"fire":     2,
+			"electric": 2,
+			"grass":    0.5,
+			"poison":   2,
+			"flying":   0,
+			"bug":      0.5,
+			"rock":     2,
+			"steel":    2,
 		},
-		"Flying": {
-			"Electric": 0.5,
-			"Grass":    2,
-			"Fighting": 2,
-			"Bug":      2,
-			"Rock":     0.5,
-			"Steel":    0.5,
+		"flying": {
+			"electric": 0.5,
+			"grass":    2,
+			"fighting": 2,
+			"bug":      2,
+			"rock":     0.5,
+			"steel":    0.5,
 		},
-		"Psychic": {
-			"Fighting": 2,
-			"Poison":   2,
-			"Psychic":  0.5,
-			"Dark":     0,
-			"Steel":    0.5,
+		"psychic": {
+			"fighting": 2,
+			"poison":   2,
+			"psychic":  0.5,
+			"dark":     0,
+			"steel":    0.5,
 		},
-		"Bug": {
-			"Fire":     0.5,
-			"Grass":    2,
-			"Fighting": 0.5,
-			"Poison":   0.5,
-			"Flying":   0.5,
-			"Psychic":  2,
-			"Ghost":    0.5,
-			"Dark":     2,
-			"Steel":    0.5,
-			"Fairy":    0.5,
+		"bug": {
+			"fire":     0.5,
+			"grass":    2,
+			"fighting": 0.5,
+			"poison":   0.5,
+			"flying":   0.5,
+			"psychic":  2,
+			"ghost":    0.5,
+			"dark":     2,
+			"steel":    0.5,
+			"fairy":    0.5,
 		},
-		"Rock": {
-			"Fire":     2,
-			"Ice":      2,
-			"Fighting": 0.5,
-			"Ground":   0.5,
-			"Flying":   2,
-			"Bug":      2,
-			"Steel":    0.5,
+		"rock": {
+			"fire":     2,
+			"ice":      2,
+			"fighting": 0.5,
+			"ground":   0.5,
+			"flying":   2,
+			"bug":      2,
+			"steel":    0.5,
 		},
-		"Ghost": {
-			"Normal":  0,
-			"Psychic": 2,
-			"Ghost":   2,
-			"Dark":    0.5,
+		"ghost": {
+			"normal":  0,
+			"psychic": 2,
+			"ghost":   2,
+			"dark":    0.5,
 		},
-		"Dragon": {
-			"Dragon": 2,
-			"Steel":  0.5,
-			"Fairy":  0,
+		"dragon": {
+			"dragon": 2,
+			"steel":  0.5,
+			"fairy":  0,
 		},
-		"Dark": {
-			"Fighting": 0.5,
-			"Psychic":  2,
-			"Ghost":    2,
-			"Dark":     0.5,
-			"Fairy":    0.5,
+		"dark": {
+			"fighting": 0.5,
+			"psychic":  2,
+			"ghost":    2,
+			"dark":     0.5,
+			"fairy":    0.5,
 		},
-		"Steel": {
-			"Fire":     0.5,
-			"Water":    0.5,
-			"Electric": 0.5,
-			"Ice":      2,
-			"Rock":     2,
-			"Steel":    0.5,
-			"Fairy":    2,
+		"steel": {
+			"fire":     0.5,
+			"water":    0.5,
+			"electric": 0.5,
+			"ice":      2,
+			"rock":     2,
+			"steel":    0.5,
+			"fairy":    2,
 		},
-		"Fairy": {
-			"Fire":     0.5,
-			"Fighting": 2,
-			"Poison":   0.5,
-			"Dragon":   2,
-			"Dark":     2,
-			"Steel":    0.5,
+		"fairy": {
+			"fire":     0.5,
+			"fighting": 2,
+			"poison":   0.5,
+			"dragon":   2,
+			"dark":     2,
+			"steel":    0.5,
 		},
 	}
+
+	moveType = strings.ToLower(moveType)
+	targetType = strings.ToLower(targetType)
 
 	if effectiveness, ok := typeChart[moveType]; ok {
 		if modifier, ok := effectiveness[targetType]; ok {
