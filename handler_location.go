@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
+	"github.com/moceviciusda/pokeCLIpse-server/internal/pokebattle"
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
@@ -223,13 +224,52 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		Speed:          p.Stats[5].BaseStat,
 	}
 
+	moves := make([]pokeutils.Move, 0, len(p.Moves))
+	for _, move := range p.Moves {
+		m, err := cfg.pokeapiClient.GetMove(move.Move.Name)
+		if err != nil {
+			log.Println("Failed to get user: " + user.Username + " move: " + err.Error())
+			conn.WriteJSON(errResponse{Error: "Failed to get move: " + err.Error()})
+			return
+		}
+
+		moves = append(moves, pokeutils.Move{
+			Name:         m.Name,
+			Accuracy:     m.Accuracy,
+			Power:        m.Power,
+			Type:         m.Type.Name,
+			DamageClass:  m.DamageClass.Name,
+			EffectChance: m.EffectChance,
+			Effect:       "",
+		})
+	}
+
+	types := make([]string, 0, len(p.Types))
+	for _, t := range p.Types {
+		types = append(types, t.Type.Name)
+	}
+
 	pokemon := pokeutils.Pokemon{
 		ID:    "",
 		Name:  p.Name,
+		Types: types,
 		Level: randomPokemon.Level,
 		Shiny: pokeutils.IsShiny(),
 		Stats: pokeutils.CalculateStats(pBaseStats, pokeutils.GenerateIVs(), randomPokemon.Level),
+		Moves: moves,
 	}
 
+	battle := pokebattle.NewBattle(pokebattle.Trainer{
+		Name:    user.Username,
+		Pokemon: []pokeutils.Pokemon{pokemon},
+	}, pokebattle.Trainer{
+		Name:    "Wild " + p.Name,
+		Pokemon: []pokeutils.Pokemon{pokemon},
+	})
+
 	conn.WriteJSON(pokemon)
+
+	battle.Run()
+
+	conn.Close()
 }
