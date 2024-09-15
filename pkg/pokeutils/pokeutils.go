@@ -2,7 +2,6 @@ package pokeutils
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 )
 
@@ -131,10 +130,10 @@ func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourTex
 	} else {
 		ad = float64(attacker.Stats.SpecialAttack) / float64(defender.Stats.SpecialDefense)
 	}
-	log.Println("Attack/Defense ratio: ", ad)
+	// log.Println("Attack/Defense ratio: ", ad)
 
-	damage := ((float64(attacker.Level)*2/5+2)*float64(move.Power)*ad/50 + 2)
-	log.Println("Damage before modifiers: ", damage)
+	damage := ((float64(attacker.Level)*2/5+2)*float64(move.Power)*ad)/50 + 2
+	// log.Println("Damage before modifiers: ", damage)
 
 	var stab float64 = 1
 	for _, t := range attacker.Types {
@@ -159,7 +158,7 @@ func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourTex
 	}
 
 	damage = damage * stab * typeEffectiveness
-	log.Println("Damage after modifiers: ", damage)
+	// log.Println("Damage after modifiers: ", damage)
 
 	return int(damage), flavourText
 }
