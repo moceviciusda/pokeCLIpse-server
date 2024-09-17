@@ -22,6 +22,25 @@ type Iv struct {
 	Speed          int32
 }
 
+type Move struct {
+	ID           uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Name         string
+	Accuracy     int32
+	Power        int32
+	Pp           int32
+	Type         string
+	DamageClass  string
+	EffectChance int32
+	Effect       string
+}
+
+type MovesPokemon struct {
+	MoveName  string
+	PokemonID uuid.UUID
+}
+
 type Pokemon struct {
 	ID        uuid.UUID
 	CreatedAt time.Time

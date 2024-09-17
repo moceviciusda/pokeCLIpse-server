@@ -225,7 +225,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		Speed:          p.Stats[5].BaseStat,
 	}
 
-	moves := make([]pokeutils.Move, 0, len(p.Moves))
+	moveOptions := make([]database.Move, 0, len(p.Moves))
 	for _, move := range p.Moves {
 		for _, details := range move.VersionGroupDetails {
 			if details.LevelLearnedAt > randomPokemon.Level {
@@ -235,26 +235,49 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				continue
 			}
 
-			m, err := cfg.pokeapiClient.GetMove(move.Move.Name)
+			dbm, err := cfg.DB.GetMoveByNameOrId(r.Context(), move.Move.Name)
 			if err != nil {
-				log.Println("Failed to get user: " + user.Username + " move: " + err.Error())
-				conn.WriteJSON(errResponse{Error: "Failed to get move: " + err.Error()})
-				return
+				m, err := cfg.pokeapiClient.GetMove(move.Move.Name)
+				if err != nil {
+					log.Println("Failed to get user: " + user.Username + " move: " + err.Error())
+					conn.WriteJSON(errResponse{Error: "Failed to get move: " + err.Error()})
+					return
+				}
+
+				dbm, err = cfg.DB.CreateMove(r.Context(), database.CreateMoveParams{
+					ID:           uuid.New(),
+					CreatedAt:    user.CreatedAt,
+					UpdatedAt:    user.UpdatedAt,
+					Name:         m.Name,
+					Accuracy:     int32(m.Accuracy),
+					Power:        int32(m.Power),
+					Pp:           int32(m.Pp),
+					Type:         m.Type.Name,
+					DamageClass:  m.DamageClass.Name,
+					EffectChance: int32(m.EffectChance),
+					Effect:       m.EffectEntries[0].ShortEffect,
+				})
+				if err != nil {
+					log.Println("Failed to create move: " + err.Error())
+					conn.WriteJSON(errResponse{Error: "Failed to create move: " + err.Error()})
+					return
+				}
 			}
 
-			moves = append(moves, pokeutils.Move{
-				Name:         m.Name,
-				Accuracy:     m.Accuracy,
-				Power:        m.Power,
-				PP:           m.Pp,
-				Type:         m.Type.Name,
-				DamageClass:  m.DamageClass.Name,
-				EffectChance: m.EffectChance,
-				Effect:       "",
-			})
-
+			moveOptions = append(moveOptions, dbm)
 			break
 		}
+	}
+
+	log.Println("Sending pokemon to user: " + user.Username)
+	moves := make([]pokeutils.Move, 0, 4)
+	for i := 0; i < 4; i++ {
+		if len(moveOptions) == 0 {
+			break
+		}
+
+		m := moveOptions[rand.Intn(len(moveOptions))]
+		moves = append(moves, pokeutils.DbMoveToMove(m))
 	}
 
 	types := make([]string, 0, len(p.Types))
@@ -313,19 +336,12 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 		if battle.Winner.Name == user.Username {
 			conn.WriteJSON(message{Message: pokemon.Name + " is weakened, attempt to catch it?", Options: []string{"yes", "no"}})
-			mt, msg, err := conn.ReadMessage()
+			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("Failed to read message: " + err.Error())
 				return
 			}
-			if mt != websocket.TextMessage {
-				log.Println("Invalid message type")
-				return
-			}
-
 			if string(msg) == "yes" {
-				conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
-
 				ivs := pokeutils.GenerateIVs()
 				dbIvs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
 					ID:             uuid.New(),
@@ -344,7 +360,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 					return
 				}
 
-				_, err = cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
+				dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
 					ID:        uuid.New(),
 					CreatedAt: user.CreatedAt,
 					UpdatedAt: user.UpdatedAt,
@@ -358,6 +374,18 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 					log.Println("Failed to create pokemon: " + err.Error())
 					conn.WriteJSON(message{Message: "Failed to create pokemon: " + err.Error()})
 					return
+				}
+
+				for _, move := range pokemon.Moves {
+					_, err = cfg.DB.AddMoveToPokemon(r.Context(), database.AddMoveToPokemonParams{
+						PokemonID: dbPokemon.ID,
+						MoveName:  move.Name,
+					})
+					if err != nil {
+						log.Println("Failed to add move to pokemon: " + err.Error())
+						conn.WriteJSON(message{Message: "Failed to add move to pokemon: " + err.Error()})
+						return
+					}
 				}
 
 				conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
