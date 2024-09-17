@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/pokebattle"
@@ -284,16 +285,9 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	type message struct {
-		Error   string   `json:"error"`
-		Message string   `json:"message"`
-		Options []string `json:"options"`
-	}
-
 	switch string(msg) {
 	case "battle":
 		battleMsgChan := make(chan string)
-		defer close(battleMsgChan)
 
 		battle := pokebattle.NewBattle(pokebattle.Trainer{
 			Name:    user.Username,
@@ -313,10 +307,66 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 		go battle.Run()
 
-		for {
-			battleMsg := <-battleMsgChan
+		for battleMsg := range battleMsgChan {
 			conn.WriteJSON(message{Message: battleMsg})
 		}
+
+		if battle.Winner.Name == user.Username {
+			conn.WriteJSON(message{Message: pokemon.Name + " is weakened, attempt to catch it?", Options: []string{"yes", "no"}})
+			mt, msg, err := conn.ReadMessage()
+			if err != nil {
+				log.Println("Failed to read message: " + err.Error())
+				return
+			}
+			if mt != websocket.TextMessage {
+				log.Println("Invalid message type")
+				return
+			}
+
+			if string(msg) == "yes" {
+				conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
+
+				ivs := pokeutils.GenerateIVs()
+				dbIvs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
+					ID:             uuid.New(),
+					CreatedAt:      user.CreatedAt,
+					UpdatedAt:      user.UpdatedAt,
+					Hp:             int32(ivs.Hp),
+					Attack:         int32(ivs.Attack),
+					Defense:        int32(ivs.Defense),
+					SpecialAttack:  int32(ivs.SpecialAttack),
+					SpecialDefense: int32(ivs.SpecialDefense),
+					Speed:          int32(ivs.Speed),
+				})
+				if err != nil {
+					log.Println("Failed to create IVs: " + err.Error())
+					conn.WriteJSON(message{Message: "Failed to create IVs: " + err.Error()})
+					return
+				}
+
+				_, err = cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
+					ID:        uuid.New(),
+					CreatedAt: user.CreatedAt,
+					UpdatedAt: user.UpdatedAt,
+					OwnerID:   user.ID,
+					Name:      pokemon.Name,
+					Level:     int32(pokemon.Level),
+					Shiny:     pokemon.Shiny,
+					IvsID:     dbIvs.ID,
+				})
+				if err != nil {
+					log.Println("Failed to create pokemon: " + err.Error())
+					conn.WriteJSON(message{Message: "Failed to create pokemon: " + err.Error()})
+					return
+				}
+
+				conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
+			}
+
+		} else {
+			conn.WriteJSON(message{Message: "You lost!"})
+		}
+
 	default:
 		log.Println("Invalid message: " + string(msg))
 	}

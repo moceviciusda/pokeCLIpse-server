@@ -32,6 +32,8 @@ func NewBattle(trainer1, trainer2 Trainer, msgChan chan string) *Battle {
 }
 
 func (b *Battle) Run() {
+	defer close(b.msgChan)
+
 	trainer1 := &b.Trainers[0]
 	trainer2 := &b.Trainers[1]
 
