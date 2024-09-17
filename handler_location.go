@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -226,67 +227,47 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		Speed:          p.Stats[5].BaseStat,
 	}
 
-	moveOptions := make(map[string]database.Move)
-	for _, move := range p.Moves {
-		if _, ok := moveOptions[move.Move.Name]; ok {
-			continue
-		}
-
-		for _, details := range move.VersionGroupDetails {
-			if details.LevelLearnedAt > randomPokemon.Level {
-				continue
-			}
-			if !(details.MoveLearnMethod.Name == "level-up" || details.MoveLearnMethod.Name == "egg") {
-				continue
-			}
-
-			dbm, err := cfg.DB.GetMoveByName(r.Context(), move.Move.Name)
-			if err != nil {
-				m, err := cfg.pokeapiClient.GetMove(move.Move.Name)
-				if err != nil {
-					conn.WriteJSON(errResponse{Error: "Failed to get move: " + err.Error()})
-					return
-				}
-
-				dbm, err = cfg.DB.CreateMove(r.Context(), database.CreateMoveParams{
-					ID:           uuid.New(),
-					CreatedAt:    user.CreatedAt,
-					UpdatedAt:    user.UpdatedAt,
-					Name:         m.Name,
-					Accuracy:     int32(m.Accuracy),
-					Power:        int32(m.Power),
-					Pp:           int32(m.Pp),
-					Type:         m.Type.Name,
-					DamageClass:  m.DamageClass.Name,
-					EffectChance: int32(m.EffectChance),
-					Effect:       m.EffectEntries[0].ShortEffect,
-				})
-				if err != nil {
-					log.Println("Failed to create move: " + err.Error())
-					conn.WriteJSON(errResponse{Error: "Failed to create move: " + err.Error()})
-					return
-				}
-			}
-
-			moveOptions[move.Move.Name] = dbm
-			break
-		}
+	rMoves, err := cfg.pokeapiClient.SelectRandomMoves(p.Name, randomPokemon.Level)
+	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " pokemon moves: " + err.Error())
+		conn.WriteJSON(errResponse{Error: "Failed to get pokemon moves: " + err.Error()})
+		return
 	}
 
 	moves := make([]pokeutils.Move, 0, 4)
-	for i := 0; i < 4; i++ {
-		if len(moveOptions) == 0 || len(moves) == 4 {
-			break
+	for _, move := range rMoves {
+		dbMove, err := cfg.DB.GetMoveByName(r.Context(), move.Name)
+		if err != nil {
+			dbMove, err = cfg.DB.CreateMove(r.Context(), database.CreateMoveParams{
+				ID:           uuid.New(),
+				CreatedAt:    time.Now().UTC(),
+				UpdatedAt:    time.Now().UTC(),
+				Name:         move.Name,
+				Accuracy:     int32(move.Accuracy),
+				Power:        int32(move.Power),
+				Pp:           int32(move.Pp),
+				Type:         move.Type.Name,
+				DamageClass:  move.DamageClass.Name,
+				EffectChance: int32(move.EffectChance),
+				Effect:       move.EffectEntries[0].ShortEffect,
+			})
+			if err != nil {
+				log.Println("Failed to create move: " + err.Error())
+				conn.WriteJSON(errResponse{Error: "Failed to create move: " + err.Error()})
+				return
+			}
 		}
 
-		moveOptKeys := make([]string, 0, len(moveOptions))
-		for k := range moveOptions {
-			moveOptKeys = append(moveOptKeys, k)
-		}
-		moveName := moveOptKeys[rand.Intn(len(moveOptKeys))]
-
-		moves = append(moves, dbMoveToMove(moveOptions[moveName]))
-		delete(moveOptions, moveName)
+		moves = append(moves, pokeutils.Move{
+			Name:         dbMove.Name,
+			Accuracy:     int(dbMove.Accuracy),
+			Power:        int(dbMove.Power),
+			PP:           int(dbMove.Pp),
+			Type:         dbMove.Type,
+			DamageClass:  dbMove.DamageClass,
+			EffectChance: int(dbMove.EffectChance),
+			Effect:       dbMove.Effect,
+		})
 	}
 
 	types := make([]string, 0, len(p.Types))
@@ -368,8 +349,8 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 				dbIvs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
 					ID:             uuid.New(),
-					CreatedAt:      user.CreatedAt,
-					UpdatedAt:      user.UpdatedAt,
+					CreatedAt:      time.Now().UTC(),
+					UpdatedAt:      time.Now().UTC(),
 					Hp:             int32(ivs.Hp),
 					Attack:         int32(ivs.Attack),
 					Defense:        int32(ivs.Defense),
@@ -385,8 +366,8 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 				dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
 					ID:        uuid.New(),
-					CreatedAt: user.CreatedAt,
-					UpdatedAt: user.UpdatedAt,
+					CreatedAt: time.Now().UTC(),
+					UpdatedAt: time.Now().UTC(),
 					OwnerID:   user.ID,
 					Name:      pokemon.Name,
 					Level:     int32(pokemon.Level),
@@ -400,7 +381,6 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				}
 
 				for _, move := range pokemon.Moves {
-					log.Println("Adding move to pokemon: " + move.Name)
 					_, err = cfg.DB.AddMoveToPokemon(r.Context(), database.AddMoveToPokemonParams{
 						PokemonID: dbPokemon.ID,
 						MoveName:  move.Name,

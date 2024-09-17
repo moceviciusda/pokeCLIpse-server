@@ -75,6 +75,46 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	rMoves, err := cfg.pokeapiClient.SelectRandomMoves(p.Name, int(params.Level))
+	if err != nil {
+		log.Println("Failed to get user: " + user.Username + " pokemon moves: " + err.Error())
+		respondWithError(w, 500, "Failed to get pokemon moves: "+err.Error())
+		return
+	}
+
+	for _, move := range rMoves {
+		dbMove, err := cfg.DB.GetMoveByName(r.Context(), move.Name)
+		if err != nil {
+			dbMove, err = cfg.DB.CreateMove(r.Context(), database.CreateMoveParams{
+				ID:           uuid.New(),
+				CreatedAt:    time.Now().UTC(),
+				UpdatedAt:    time.Now().UTC(),
+				Name:         move.Name,
+				Accuracy:     int32(move.Accuracy),
+				Power:        int32(move.Power),
+				Pp:           int32(move.Pp),
+				Type:         move.Type.Name,
+				DamageClass:  move.DamageClass.Name,
+				EffectChance: int32(move.EffectChance),
+				Effect:       move.EffectEntries[0].ShortEffect,
+			})
+			if err != nil {
+				log.Println("Failed to create move: " + err.Error())
+				respondWithError(w, 500, "Failed to create move: "+err.Error())
+				return
+			}
+		}
+
+		_, err = cfg.DB.AddMoveToPokemon(r.Context(), database.AddMoveToPokemonParams{
+			PokemonID: dbPokemon.ID,
+			MoveName:  dbMove.Name,
+		})
+		if err != nil {
+			log.Println("Failed to create pokemon move: " + err.Error())
+			return
+		}
+	}
+
 	pBaseStats := pokeutils.Stats{
 		Hp:             p.Stats[0].BaseStat,
 		Attack:         p.Stats[1].BaseStat,

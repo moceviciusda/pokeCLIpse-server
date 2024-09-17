@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 )
 
 func (c *Client) GetMove(nameOrId string) (MoveResponse, error) {
@@ -35,4 +36,53 @@ func (c *Client) GetMove(nameOrId string) (MoveResponse, error) {
 	}
 
 	return move, nil
+}
+
+func (c *Client) SelectRandomMoves(pokemonNameOrId string, level int) ([]MoveResponse, error) {
+	pokemon, err := c.GetPokemon(pokemonNameOrId)
+	if err != nil {
+		return nil, err
+	}
+
+	moveOptions := make(map[string]MoveResponse)
+	for _, move := range pokemon.Moves {
+		if _, ok := moveOptions[move.Move.Name]; ok {
+			continue
+		}
+
+		for _, details := range move.VersionGroupDetails {
+			if details.LevelLearnedAt > level {
+				continue
+			}
+			if !(details.MoveLearnMethod.Name == "level-up" || details.MoveLearnMethod.Name == "egg") {
+				continue
+			}
+
+			m, err := c.GetMove(move.Move.Name)
+			if err != nil {
+				return nil, err
+			}
+
+			moveOptions[move.Move.Name] = m
+			break
+		}
+	}
+
+	moves := make([]MoveResponse, 0, 4)
+	for i := 0; i < 4; i++ {
+		if len(moveOptions) == 0 || len(moves) == 4 {
+			break
+		}
+
+		moveOptKeys := make([]string, 0, len(moveOptions))
+		for k := range moveOptions {
+			moveOptKeys = append(moveOptKeys, k)
+		}
+		moveName := moveOptKeys[rand.Intn(len(moveOptKeys))]
+
+		moves = append(moves, moveOptions[moveName])
+		delete(moveOptions, moveName)
+	}
+
+	return moves, nil
 }
