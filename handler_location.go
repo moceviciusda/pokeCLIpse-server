@@ -271,16 +271,54 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		Moves: moves,
 	}
 
-	battle := pokebattle.NewBattle(pokebattle.Trainer{
-		Name:    user.Username,
-		Pokemon: []pokeutils.Pokemon{pokeutils.Pikachu},
-	}, pokebattle.Trainer{
-		Name:    "Wild",
-		Pokemon: []pokeutils.Pokemon{pokemon},
-	})
-
 	conn.WriteJSON(pokemon)
 
-	battle.Run()
+	mt, msg, err := conn.ReadMessage()
+	if err != nil {
+		log.Println("Failed to read message: " + err.Error())
+		return
+	}
+
+	if mt != websocket.TextMessage {
+		log.Println("Invalid message type")
+		return
+	}
+
+	type message struct {
+		Error   string   `json:"error"`
+		Message string   `json:"message"`
+		Options []string `json:"options"`
+	}
+
+	switch string(msg) {
+	case "battle":
+		battleMsgChan := make(chan string)
+		defer close(battleMsgChan)
+
+		battle := pokebattle.NewBattle(pokebattle.Trainer{
+			Name:    user.Username,
+			Pokemon: []pokeutils.Pokemon{pokeutils.Pikachu},
+		}, pokebattle.Trainer{
+			Name:    "Wild",
+			Pokemon: []pokeutils.Pokemon{pokemon},
+		},
+			battleMsgChan,
+		)
+
+		type message struct {
+			Error   string   `json:"error"`
+			Message string   `json:"message"`
+			Options []string `json:"options"`
+		}
+
+		go battle.Run()
+
+		for {
+			battleMsg := <-battleMsgChan
+			conn.WriteJSON(message{Message: battleMsg})
+		}
+	default:
+		log.Println("Invalid message: " + string(msg))
+	}
 
 }

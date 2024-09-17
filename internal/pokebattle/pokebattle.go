@@ -1,6 +1,7 @@
 package pokebattle
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -18,12 +19,15 @@ type PokemonState struct {
 }
 
 type Battle struct {
+	msgChan  chan string
 	Trainers [2]Trainer
+	Winner   *Trainer
 }
 
-func NewBattle(trainer1, trainer2 Trainer) *Battle {
+func NewBattle(trainer1, trainer2 Trainer, msgChan chan string) *Battle {
 	return &Battle{
 		Trainers: [2]Trainer{trainer1, trainer2},
+		msgChan:  msgChan,
 	}
 }
 
@@ -34,12 +38,21 @@ func (b *Battle) Run() {
 	pokemon1 := &trainer1.Pokemon[0]
 	pokemon2 := &trainer2.Pokemon[0]
 
-	pokemon1AttackTimeout := float64(pokemon2.Stats.Speed) / float64(pokemon1.Stats.Speed) * 1000
-	pokemon2AttackTimeout := float64(pokemon1.Stats.Speed) / float64(pokemon2.Stats.Speed) * 1000
+	var pokemon1AttackTimeout, pokemon2AttackTimeout float64 = 5, 5
+	if pokemon1.Stats.Speed > pokemon2.Stats.Speed {
+		pokemon1AttackTimeout = float64(pokemon2.Stats.Speed) / float64(pokemon1.Stats.Speed) * 5
+		if pokemon1AttackTimeout < 2 {
+			pokemon1AttackTimeout = 2
+		}
+	} else {
+		pokemon2AttackTimeout = float64(pokemon1.Stats.Speed) / float64(pokemon2.Stats.Speed) * 5
+		if pokemon2AttackTimeout < 2 {
+			pokemon2AttackTimeout = 2
+		}
+	}
 
-	log.Print(pokemon1AttackTimeout, pokemon2AttackTimeout)
-	pokemon1Ticker := time.NewTicker(time.Duration(pokemon1AttackTimeout) * 2 * time.Millisecond)
-	pokemon2Ticker := time.NewTicker(time.Duration(pokemon2AttackTimeout) * 2 * time.Millisecond)
+	pokemon1Ticker := time.NewTicker(time.Duration(pokemon1AttackTimeout*1000) * time.Millisecond)
+	pokemon2Ticker := time.NewTicker(time.Duration(pokemon2AttackTimeout*1000) * time.Millisecond)
 
 	defer pokemon1Ticker.Stop()
 	defer pokemon2Ticker.Stop()
@@ -47,54 +60,31 @@ func (b *Battle) Run() {
 	for {
 		select {
 		case <-pokemon1Ticker.C:
-			attack(pokemon1, pokemon2)
+			msg, err := attack(pokemon1, pokemon2)
+			if err != nil {
+				pokemon1.Stats.Hp = 0
+			}
+			b.msgChan <- "\033[32m" + msg
 		case <-pokemon2Ticker.C:
-			attack(pokemon2, pokemon1)
+			msg, err := attack(pokemon2, pokemon1)
+			if err != nil {
+				pokemon2.Stats.Hp = 0
+			}
+			b.msgChan <- "\033[31m" + msg
 		}
 
 		if pokemon1.Stats.Hp <= 0 {
-			log.Println(trainer1.Name + "'s " + pokemon1.Name + " fainted!")
+			b.msgChan <- trainer1.Name + "'s " + pokemon1.Name + " fainted!"
+			b.Winner = trainer2
 			break
 		}
 
 		if pokemon2.Stats.Hp <= 0 {
-			log.Println(trainer2.Name + "'s " + pokemon2.Name + " fainted!")
+			b.msgChan <- trainer2.Name + "'s " + pokemon2.Name + " fainted!"
+			b.Winner = trainer1
 			break
 		}
 	}
-
-	// for range ticker.C {
-	// 	for i := 0; i < 2; i++ {
-	// 		log.Println()
-	// 		attacker := &b.Trainers[i]
-	// 		defender := &b.Trainers[(i+1)%2]
-
-	// 		move, ok := selectMove(&attacker.Pokemon[0])
-	// 		if !ok {
-	// 			log.Printf("%s's %s has no moves left!\n", attacker.Name, attacker.Pokemon[0].Name)
-	// 			continue
-	// 		}
-
-	// 		if move.Accuracy < rand.Intn(100) {
-	// 			log.Printf("%s's %s used %s but missed!\n", attacker.Name, attacker.Pokemon[0].Name, move.Name)
-	// 			continue
-	// 		}
-
-	// 		damage, flavourText := pokeutils.CalculateDamage(attacker.Pokemon[0], defender.Pokemon[0], move)
-	// 		log.Printf("%s's %s used %s and dealt %d damage to %s's %s\n", attacker.Name, attacker.Pokemon[0].Name, move.Name, damage, defender.Name, defender.Pokemon[0].Name)
-	// 		if flavourText != "" {
-	// 			log.Println(flavourText)
-	// 		}
-
-	// 		defender.Pokemon[0].Stats.Hp -= damage
-
-	// 		if defender.Pokemon[0].Stats.Hp <= 0 {
-	// 			log.Println(defender.Name + "'s " + defender.Pokemon[0].Name + " fainted!")
-	// 			return
-	// 		}
-	// 	}
-
-	// }
 }
 
 func selectMove(p *pokeutils.Pokemon) (pokeutils.Move, bool) {
@@ -114,23 +104,22 @@ func selectMove(p *pokeutils.Pokemon) (pokeutils.Move, bool) {
 	return move, true
 }
 
-func attack(attacker, defender *pokeutils.Pokemon) {
+func attack(attacker, defender *pokeutils.Pokemon) (string, error) {
 	move, ok := selectMove(attacker)
 	if !ok {
-		log.Printf("%s has no moves left!\n", attacker.Name)
-		return
+		return "", fmt.Errorf("%s has no moves left!", attacker.Name)
 	}
 
 	if move.Accuracy < rand.Intn(100) {
-		log.Printf("%s used %s but missed!\n", attacker.Name, move.Name)
-		return
+		return fmt.Sprintf("%s used %s but missed!\n", attacker.Name, move.Name), nil
 	}
 
 	damage, flavourText := pokeutils.CalculateDamage(*attacker, *defender, move)
-	log.Printf("%s used %s and dealt %d damage to %s\n", attacker.Name, move.Name, damage, defender.Name)
+	msg := fmt.Sprintf("%s used %s and dealt %d damage to %s\n", attacker.Name, move.Name, damage, defender.Name)
 	if flavourText != "" {
-		log.Println(flavourText)
+		msg += flavourText + "\n"
 	}
 
 	defender.Stats.Hp -= damage
+	return msg, nil
 }
