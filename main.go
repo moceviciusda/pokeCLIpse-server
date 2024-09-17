@@ -51,7 +51,7 @@ func main() {
 	apiCfg := apiConfig{
 		DB:            database.New(conn),
 		jwtSecret:     jwtSecret,
-		pokeapiClient: pokeapi.NewClient(5*time.Minute, 5*time.Second),
+		pokeapiClient: pokeapi.NewClient(5*time.Minute, 15*time.Second),
 	}
 
 	router := chi.NewRouter()

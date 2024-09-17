@@ -30,7 +30,6 @@ type Move struct {
 }
 
 type Pokemon struct {
-	ID    string   `json:"id"`
 	Name  string   `json:"name"`
 	Types []string `json:"types"`
 	Level int      `json:"level"`

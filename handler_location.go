@@ -269,7 +269,6 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 	ivs := pokeutils.GenerateIVs()
 
 	pokemon := pokeutils.Pokemon{
-		ID:    "",
 		Name:  p.Name,
 		Types: types,
 		Level: randomPokemon.Level,
@@ -295,9 +294,42 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 	case "battle":
 		battleMsgChan := make(chan string)
 
+		dbParty, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
+		if err != nil {
+			log.Println("Failed to get user: " + user.Username + " party: " + err.Error())
+			conn.WriteJSON(errResponse{Error: "Failed to get pokemon party: " + err.Error()})
+			return
+		}
+
+		pokemonParty := make([]pokeutils.Pokemon, 0, len(dbParty))
+		for _, pokemon := range dbParty {
+			p, err := cfg.pokeapiClient.GetPokemon(pokemon.Name)
+			if err != nil {
+				log.Println("Failed to get user: " + user.Username + " party pokemon: " + err.Error())
+				conn.WriteJSON(errResponse{Error: "Failed to get party pokemon: " + err.Error()})
+				return
+			}
+
+			dbMoves, err := cfg.DB.GetMovesByPokemonID(r.Context(), pokemon.ID)
+			if err != nil {
+				log.Println("Failed to get user: " + user.Username + " party pokemon moves: " + err.Error())
+				conn.WriteJSON(errResponse{Error: "Failed to get party pokemon moves: " + err.Error()})
+				return
+			}
+
+			dbIvs, err := cfg.DB.GetIVs(r.Context(), pokemon.IvsID)
+			if err != nil {
+				log.Println("Failed to get user: " + user.Username + " party pokemon IVs: " + err.Error())
+				conn.WriteJSON(errResponse{Error: "Failed to get party pokemon IVs: " + err.Error()})
+				return
+			}
+
+			pokemonParty = append(pokemonParty, makePokemon(p, pokemon, dbMoves, dbIvs))
+		}
+
 		battle := pokebattle.NewBattle(pokebattle.Trainer{
 			Name:    user.Username,
-			Pokemon: []pokeutils.Pokemon{pokeutils.Pikachu},
+			Pokemon: pokemonParty,
 		}, pokebattle.Trainer{
 			Name:    "Wild",
 			Pokemon: []pokeutils.Pokemon{pokemon},
@@ -385,18 +417,11 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 				conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
 
-				party, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
-				if err != nil {
-					log.Println("Error getting pokemon: " + err.Error())
-					respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
-					return
-				}
-
-				if len(party) < 6 {
+				if len(dbParty) < 6 {
 					_, err := cfg.DB.AddPokemonToParty(r.Context(), database.AddPokemonToPartyParams{
 						UserID:    user.ID,
 						PokemonID: dbPokemon.ID,
-						Position:  int32(len(party) + 1),
+						Position:  int32(len(dbParty) + 1),
 					})
 					if err != nil {
 						log.Println("Failed to add pokemon to party: " + err.Error())
