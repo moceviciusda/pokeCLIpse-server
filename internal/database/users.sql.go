@@ -12,6 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
+const addPokemonToParty = `-- name: AddPokemonToParty :one
+INSERT INTO pokemon_party (pokemon_id, user_id, position)
+VALUES ($1, $2, $3)
+RETURNING pokemon_id, user_id, position
+`
+
+type AddPokemonToPartyParams struct {
+	PokemonID uuid.UUID
+	UserID    uuid.UUID
+	Position  int32
+}
+
+func (q *Queries) AddPokemonToParty(ctx context.Context, arg AddPokemonToPartyParams) (PokemonParty, error) {
+	row := q.db.QueryRowContext(ctx, addPokemonToParty, arg.PokemonID, arg.UserID, arg.Position)
+	var i PokemonParty
+	err := row.Scan(&i.PokemonID, &i.UserID, &i.Position)
+	return i, err
+}
+
 const checkHasPokemon = `-- name: CheckHasPokemon :one
 SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1 AND name = $2 AND shiny = $3 LIMIT 1
 `
@@ -74,6 +93,74 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const getPokemonInPartyPosition = `-- name: GetPokemonInPartyPosition :one
+SELECT p.id, p.created_at, p.updated_at, p.name, p.level, p.shiny, p.ivs_id, p.owner_id
+FROM pokemon p
+JOIN pokemon_party pp ON p.id = pp.pokemon_id
+WHERE pp.user_id = $1 AND pp.position = $2
+`
+
+type GetPokemonInPartyPositionParams struct {
+	UserID   uuid.UUID
+	Position int32
+}
+
+func (q *Queries) GetPokemonInPartyPosition(ctx context.Context, arg GetPokemonInPartyPositionParams) (Pokemon, error) {
+	row := q.db.QueryRowContext(ctx, getPokemonInPartyPosition, arg.UserID, arg.Position)
+	var i Pokemon
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Level,
+		&i.Shiny,
+		&i.IvsID,
+		&i.OwnerID,
+	)
+	return i, err
+}
+
+const getPokemonParty = `-- name: GetPokemonParty :many
+SELECT p.id, p.created_at, p.updated_at, p.name, p.level, p.shiny, p.ivs_id, p.owner_id
+FROM pokemon p
+JOIN pokemon_party pp ON p.id = pp.pokemon_id
+WHERE pp.user_id = $1
+ORDER BY pp.position
+`
+
+func (q *Queries) GetPokemonParty(ctx context.Context, userID uuid.UUID) ([]Pokemon, error) {
+	rows, err := q.db.QueryContext(ctx, getPokemonParty, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Pokemon
+	for rows.Next() {
+		var i Pokemon
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+			&i.Level,
+			&i.Shiny,
+			&i.IvsID,
+			&i.OwnerID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserById = `-- name: GetUserById :one
 SELECT id, created_at, updated_at, username, password, location_offset FROM users WHERE id = $1
 `
@@ -108,6 +195,57 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.LocationOffset,
 	)
 	return i, err
+}
+
+const getUserPokemon = `-- name: GetUserPokemon :many
+SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1
+`
+
+func (q *Queries) GetUserPokemon(ctx context.Context, ownerID uuid.UUID) ([]Pokemon, error) {
+	rows, err := q.db.QueryContext(ctx, getUserPokemon, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Pokemon
+	for rows.Next() {
+		var i Pokemon
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+			&i.Level,
+			&i.Shiny,
+			&i.IvsID,
+			&i.OwnerID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removePokemonFromParty = `-- name: RemovePokemonFromParty :exec
+DELETE FROM pokemon_party
+WHERE pokemon_id = $1 AND user_id = $2
+`
+
+type RemovePokemonFromPartyParams struct {
+	PokemonID uuid.UUID
+	UserID    uuid.UUID
+}
+
+func (q *Queries) RemovePokemonFromParty(ctx context.Context, arg RemovePokemonFromPartyParams) error {
+	_, err := q.db.ExecContext(ctx, removePokemonFromParty, arg.PokemonID, arg.UserID)
+	return err
 }
 
 const updateUserLocation = `-- name: UpdateUserLocation :one

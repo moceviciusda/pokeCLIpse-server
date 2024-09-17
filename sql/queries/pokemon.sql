@@ -3,9 +3,6 @@ INSERT INTO pokemon (id, created_at, updated_at, name, level, shiny, ivs_id, own
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
--- name: GetPokemonPartyByOwnerID :many
-SELECT * FROM pokemon WHERE owner_id = $1 ORDER BY updated_at DESC;
-
 -- name: GetPokemonWithIvsByOwnerID :many
 SELECT 
     p.id,

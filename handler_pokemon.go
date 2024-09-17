@@ -115,6 +115,26 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	party, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
+	if err != nil {
+		log.Println("Error getting pokemon: " + err.Error())
+		respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
+		return
+	}
+
+	if len(party) < 6 {
+		_, err := cfg.DB.AddPokemonToParty(r.Context(), database.AddPokemonToPartyParams{
+			UserID:    user.ID,
+			PokemonID: dbPokemon.ID,
+			Position:  int32(len(party) + 1),
+		})
+		if err != nil {
+			log.Println("Failed to add pokemon to party: " + err.Error())
+			respondWithError(w, 500, "Failed to add pokemon to party: "+err.Error())
+			return
+		}
+	}
+
 	pBaseStats := pokeutils.Stats{
 		Hp:             p.Stats[0].BaseStat,
 		Attack:         p.Stats[1].BaseStat,
@@ -143,7 +163,7 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 }
 
 func (cfg *apiConfig) handlerGetPokemonParty(w http.ResponseWriter, r *http.Request, user database.User) {
-	pokemons, err := cfg.DB.GetPokemonPartyByOwnerID(r.Context(), user.ID)
+	pokemons, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
 	if err != nil {
 		log.Println("Error getting pokemon: " + err.Error())
 		respondWithError(w, 500, "Failed to get pokemon: "+err.Error())

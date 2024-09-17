@@ -258,16 +258,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			}
 		}
 
-		moves = append(moves, pokeutils.Move{
-			Name:         dbMove.Name,
-			Accuracy:     int(dbMove.Accuracy),
-			Power:        int(dbMove.Power),
-			PP:           int(dbMove.Pp),
-			Type:         dbMove.Type,
-			DamageClass:  dbMove.DamageClass,
-			EffectChance: int(dbMove.EffectChance),
-			Effect:       dbMove.Effect,
-		})
+		moves = append(moves, dbMoveToMove(dbMove))
 	}
 
 	types := make([]string, 0, len(p.Types))
@@ -393,6 +384,26 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				}
 
 				conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
+
+				party, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
+				if err != nil {
+					log.Println("Error getting pokemon: " + err.Error())
+					respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
+					return
+				}
+
+				if len(party) < 6 {
+					_, err := cfg.DB.AddPokemonToParty(r.Context(), database.AddPokemonToPartyParams{
+						UserID:    user.ID,
+						PokemonID: dbPokemon.ID,
+						Position:  int32(len(party) + 1),
+					})
+					if err != nil {
+						log.Println("Failed to add pokemon to party: " + err.Error())
+						respondWithError(w, 500, "Failed to add pokemon to party: "+err.Error())
+						return
+					}
+				}
 			}
 
 		} else {

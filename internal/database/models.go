@@ -52,6 +52,12 @@ type Pokemon struct {
 	OwnerID   uuid.UUID
 }
 
+type PokemonParty struct {
+	PokemonID uuid.UUID
+	UserID    uuid.UUID
+	Position  int32
+}
+
 type User struct {
 	ID             uuid.UUID
 	CreatedAt      time.Time
