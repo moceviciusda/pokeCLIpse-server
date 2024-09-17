@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -225,8 +226,12 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		Speed:          p.Stats[5].BaseStat,
 	}
 
-	moveOptions := make([]database.Move, 0, len(p.Moves))
+	moveOptions := make(map[string]database.Move)
 	for _, move := range p.Moves {
+		if _, ok := moveOptions[move.Move.Name]; ok {
+			continue
+		}
+
 		for _, details := range move.VersionGroupDetails {
 			if details.LevelLearnedAt > randomPokemon.Level {
 				continue
@@ -235,11 +240,10 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				continue
 			}
 
-			dbm, err := cfg.DB.GetMoveByNameOrId(r.Context(), move.Move.Name)
+			dbm, err := cfg.DB.GetMoveByName(r.Context(), move.Move.Name)
 			if err != nil {
 				m, err := cfg.pokeapiClient.GetMove(move.Move.Name)
 				if err != nil {
-					log.Println("Failed to get user: " + user.Username + " move: " + err.Error())
 					conn.WriteJSON(errResponse{Error: "Failed to get move: " + err.Error()})
 					return
 				}
@@ -264,20 +268,25 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				}
 			}
 
-			moveOptions = append(moveOptions, dbm)
+			moveOptions[move.Move.Name] = dbm
 			break
 		}
 	}
 
-	log.Println("Sending pokemon to user: " + user.Username)
 	moves := make([]pokeutils.Move, 0, 4)
 	for i := 0; i < 4; i++ {
-		if len(moveOptions) == 0 {
+		if len(moveOptions) == 0 || len(moves) == 4 {
 			break
 		}
 
-		m := moveOptions[rand.Intn(len(moveOptions))]
-		moves = append(moves, pokeutils.DbMoveToMove(m))
+		moveOptKeys := make([]string, 0, len(moveOptions))
+		for k := range moveOptions {
+			moveOptKeys = append(moveOptKeys, k)
+		}
+		moveName := moveOptKeys[rand.Intn(len(moveOptKeys))]
+
+		moves = append(moves, dbMoveToMove(moveOptions[moveName]))
+		delete(moveOptions, moveName)
 	}
 
 	types := make([]string, 0, len(p.Types))
@@ -285,13 +294,15 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		types = append(types, t.Type.Name)
 	}
 
+	ivs := pokeutils.GenerateIVs()
+
 	pokemon := pokeutils.Pokemon{
 		ID:    "",
 		Name:  p.Name,
 		Types: types,
 		Level: randomPokemon.Level,
 		Shiny: pokeutils.IsShiny(),
-		Stats: pokeutils.CalculateStats(pBaseStats, pokeutils.GenerateIVs(), randomPokemon.Level),
+		Stats: pokeutils.CalculateStats(pBaseStats, ivs, randomPokemon.Level),
 		Moves: moves,
 	}
 
@@ -335,14 +346,26 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		}
 
 		if battle.Winner.Name == user.Username {
-			conn.WriteJSON(message{Message: pokemon.Name + " is weakened, attempt to catch it?", Options: []string{"yes", "no"}})
+			prompt := fmt.Sprintf(pokemon.Name + " is weakened, attempt to catch it?")
+			ownedP, err := cfg.DB.CheckHasPokemon(r.Context(), database.CheckHasPokemonParams{
+				OwnerID: user.ID,
+				Name:    pokemon.Name,
+				Shiny:   pokemon.Shiny,
+			})
+			if err == nil {
+				prompt += fmt.Sprintf("\nYou already have a lvl %d %s. If you catch this one, the old one will be released", ownedP.Level, ownedP.Name)
+			}
+
+			conn.WriteJSON(message{Message: prompt, Options: []string{"yes", "no"}})
+
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("Failed to read message: " + err.Error())
 				return
 			}
 			if string(msg) == "yes" {
-				ivs := pokeutils.GenerateIVs()
+				cfg.DB.DeletePokemon(r.Context(), ownedP.ID)
+
 				dbIvs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
 					ID:             uuid.New(),
 					CreatedAt:      user.CreatedAt,
@@ -377,6 +400,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				}
 
 				for _, move := range pokemon.Moves {
+					log.Println("Adding move to pokemon: " + move.Name)
 					_, err = cfg.DB.AddMoveToPokemon(r.Context(), database.AddMoveToPokemonParams{
 						PokemonID: dbPokemon.ID,
 						MoveName:  move.Name,

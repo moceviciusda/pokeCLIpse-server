@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
+	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
 type User struct {
@@ -46,3 +47,16 @@ type Pokemon struct {
 // 		dbPokemon.Shiny,
 // 	}
 // }
+
+func dbMoveToMove(dbMove database.Move) pokeutils.Move {
+	return pokeutils.Move{
+		Name:         dbMove.Name,
+		Accuracy:     int(dbMove.Accuracy),
+		Power:        int(dbMove.Power),
+		PP:           int(dbMove.Pp),
+		Type:         dbMove.Type,
+		DamageClass:  dbMove.DamageClass,
+		EffectChance: int(dbMove.EffectChance),
+		Effect:       dbMove.Effect,
+	}
+}

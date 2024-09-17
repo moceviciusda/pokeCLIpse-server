@@ -12,6 +12,32 @@ import (
 	"github.com/google/uuid"
 )
 
+const checkHasPokemon = `-- name: CheckHasPokemon :one
+SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1 AND name = $2 AND shiny = $3 LIMIT 1
+`
+
+type CheckHasPokemonParams struct {
+	OwnerID uuid.UUID
+	Name    string
+	Shiny   bool
+}
+
+func (q *Queries) CheckHasPokemon(ctx context.Context, arg CheckHasPokemonParams) (Pokemon, error) {
+	row := q.db.QueryRowContext(ctx, checkHasPokemon, arg.OwnerID, arg.Name, arg.Shiny)
+	var i Pokemon
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Level,
+		&i.Shiny,
+		&i.IvsID,
+		&i.OwnerID,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, created_at, updated_at, username, password, location_offset)
 VALUES ($1, $2, $3, $4, $5, $6)

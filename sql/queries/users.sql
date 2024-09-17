@@ -14,3 +14,6 @@ UPDATE users
     set location_offset = $2
 WHERE id = $1
 RETURNING *;
+
+-- name: CheckHasPokemon :one
+SELECT * FROM pokemon WHERE owner_id = $1 AND name = $2 AND shiny = $3 LIMIT 1;

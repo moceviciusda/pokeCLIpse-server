@@ -1,7 +1,5 @@
 package pokeutils
 
-import "github.com/moceviciusda/pokeCLIpse-server/internal/database"
-
 type IVs struct {
 	Hp             int `json:"hp"`
 	Attack         int `json:"attack"`
@@ -39,17 +37,4 @@ type Pokemon struct {
 	Shiny bool     `json:"shiny"`
 	Stats Stats    `json:"stats"`
 	Moves []Move   `json:"moves"`
-}
-
-func DbMoveToMove(dbMove database.Move) Move {
-	return Move{
-		Name:         dbMove.Name,
-		Accuracy:     int(dbMove.Accuracy),
-		Power:        int(dbMove.Power),
-		PP:           int(dbMove.Pp),
-		Type:         dbMove.Type,
-		DamageClass:  dbMove.DamageClass,
-		EffectChance: int(dbMove.EffectChance),
-		Effect:       dbMove.Effect,
-	}
 }

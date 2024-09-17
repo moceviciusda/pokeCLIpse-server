@@ -24,3 +24,6 @@ WHERE p.owner_id = $1;
 
 -- name: GetPokemon :one
 SELECT * FROM pokemon WHERE id = $1;
+
+-- name: DeletePokemon :one
+DELETE FROM pokemon WHERE id = $1 RETURNING *;

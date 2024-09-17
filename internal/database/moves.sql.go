@@ -81,12 +81,12 @@ func (q *Queries) CreateMove(ctx context.Context, arg CreateMoveParams) (Move, e
 	return i, err
 }
 
-const getMoveByNameOrId = `-- name: GetMoveByNameOrId :one
-SELECT id, created_at, updated_at, name, accuracy, power, pp, type, damage_class, effect_chance, effect FROM moves WHERE name = $1 OR id = $1
+const getMoveByName = `-- name: GetMoveByName :one
+SELECT id, created_at, updated_at, name, accuracy, power, pp, type, damage_class, effect_chance, effect FROM moves WHERE name = $1
 `
 
-func (q *Queries) GetMoveByNameOrId(ctx context.Context, name string) (Move, error) {
-	row := q.db.QueryRowContext(ctx, getMoveByNameOrId, name)
+func (q *Queries) GetMoveByName(ctx context.Context, name string) (Move, error) {
+	row := q.db.QueryRowContext(ctx, getMoveByName, name)
 	var i Move
 	err := row.Scan(
 		&i.ID,

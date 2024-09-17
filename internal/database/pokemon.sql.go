@@ -54,6 +54,26 @@ func (q *Queries) CreatePokemon(ctx context.Context, arg CreatePokemonParams) (P
 	return i, err
 }
 
+const deletePokemon = `-- name: DeletePokemon :one
+DELETE FROM pokemon WHERE id = $1 RETURNING id, created_at, updated_at, name, level, shiny, ivs_id, owner_id
+`
+
+func (q *Queries) DeletePokemon(ctx context.Context, id uuid.UUID) (Pokemon, error) {
+	row := q.db.QueryRowContext(ctx, deletePokemon, id)
+	var i Pokemon
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Level,
+		&i.Shiny,
+		&i.IvsID,
+		&i.OwnerID,
+	)
+	return i, err
+}
+
 const getPokemon = `-- name: GetPokemon :one
 SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE id = $1
 `
