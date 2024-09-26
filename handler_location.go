@@ -292,8 +292,6 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 	switch string(msg) {
 	case "battle":
-		battleMsgChan := make(chan string)
-
 		dbParty, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
 		if err != nil {
 			log.Println("Failed to get user: " + user.Username + " party: " + err.Error())
@@ -327,14 +325,16 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			pokemonParty = append(pokemonParty, makePokemon(p, pokemon, dbMoves, dbIvs))
 		}
 
-		battle := pokebattle.NewBattle(pokebattle.Trainer{
-			Name:    user.Username,
-			Pokemon: pokemonParty,
-		}, pokebattle.Trainer{
-			Name:    "Wild",
-			Pokemon: []pokeutils.Pokemon{pokemon},
-		},
-			battleMsgChan,
+		battle := pokebattle.NewBattle(
+			pokebattle.Trainer{
+				Name:    user.Username,
+				Pokemon: pokemonParty,
+			},
+			pokebattle.Trainer{
+				Name:    "Wild",
+				Pokemon: []pokeutils.Pokemon{pokemon},
+			},
+			make(chan pokebattle.BattleMessage),
 		)
 
 		type message struct {
@@ -345,8 +345,33 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 		go battle.Run()
 
-		for battleMsg := range battleMsgChan {
-			conn.WriteJSON(message{Message: battleMsg})
+		for battleMsg := range battle.MsgChan {
+			switch battleMsg.Type {
+			case pokebattle.BattleMsgInfo:
+				var color string
+				if battleMsg.Subject == user.Username {
+					color = ColorGreen
+				} else if battleMsg.Subject == "Wild" {
+					color = ColorRed
+				} else {
+					color = ColorYellow
+				}
+				conn.WriteJSON(message{Message: color + battleMsg.Message})
+
+			case pokebattle.BattleMsgSelect:
+				conn.WriteJSON(message{Message: "Select a pokemon", Options: battleMsg.Options})
+				mt, msg, err := conn.ReadMessage()
+				if err != nil {
+					log.Println("Failed to read message: " + err.Error())
+					return
+				}
+				if mt != websocket.TextMessage {
+					log.Println("Invalid message type")
+					return
+				}
+
+				battle.MsgChan <- pokebattle.BattleMessage{Type: pokebattle.BattleMsgAction, Message: string(msg), Subject: user.Username}
+			}
 		}
 
 		if battle.Winner.Name == user.Username {

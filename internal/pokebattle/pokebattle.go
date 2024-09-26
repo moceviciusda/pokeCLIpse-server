@@ -18,21 +18,34 @@ type PokemonState struct {
 	HP, Attack, Defense, SpecialAttack, SpecialDefense, Speed int
 }
 
+const (
+	BattleMsgInfo = iota
+	BattleMsgSelect
+	BattleMsgAction
+)
+
+type BattleMessage struct {
+	Type    int
+	Message string
+	Subject string
+	Options []string
+}
+
 type Battle struct {
-	msgChan  chan string
+	MsgChan  chan BattleMessage
 	Trainers [2]Trainer
 	Winner   *Trainer
 }
 
-func NewBattle(trainer1, trainer2 Trainer, msgChan chan string) *Battle {
+func NewBattle(trainer1, trainer2 Trainer, msgChan chan BattleMessage) *Battle {
 	return &Battle{
 		Trainers: [2]Trainer{trainer1, trainer2},
-		msgChan:  msgChan,
+		MsgChan:  msgChan,
 	}
 }
 
 func (b *Battle) Run() {
-	defer close(b.msgChan)
+	defer close(b.MsgChan)
 
 	trainer1 := &b.Trainers[0]
 	trainer2 := &b.Trainers[1]
@@ -66,27 +79,68 @@ func (b *Battle) Run() {
 			if err != nil {
 				pokemon1.Stats.Hp = 0
 			}
-			b.msgChan <- "\033[32m" + msg
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: msg, Subject: trainer1.Name}
 		case <-pokemon2Ticker.C:
 			msg, err := attack(pokemon2, pokemon1)
 			if err != nil {
 				pokemon2.Stats.Hp = 0
 			}
-			b.msgChan <- "\033[31m" + msg
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: msg, Subject: trainer2.Name}
 		}
 
 		if pokemon1.Stats.Hp <= 0 {
-			b.msgChan <- trainer1.Name + "'s " + pokemon1.Name + " fainted!"
-			b.Winner = trainer2
-			break
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + "'s " + pokemon1.Name + " fainted!"}
+			pokemon := trainer1.GetLivePokemon()
+			if len(pokemon) == 0 {
+				b.Winner = trainer2
+				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " wins!"}
+				return
+			}
+
+			pokemon1 = b.SelectPokemon(*trainer1)
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " sent out " + pokemon1.Name + "!"}
 		}
 
 		if pokemon2.Stats.Hp <= 0 {
-			b.msgChan <- trainer2.Name + "'s " + pokemon2.Name + " fainted!"
-			b.Winner = trainer1
-			break
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + "'s " + pokemon2.Name + " fainted!"}
+			pokemon := trainer2.GetLivePokemon()
+			if len(pokemon) == 0 {
+				b.Winner = trainer1
+				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " wins!"}
+				return
+			}
+
+			pokemon2 = b.SelectPokemon(*trainer2)
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " sent out " + pokemon2.Name + "!"}
+		}
+
+	}
+}
+
+func (b *Battle) SelectPokemon(trainer Trainer) *pokeutils.Pokemon {
+	options := make([]string, 0, len(trainer.Pokemon))
+	for _, p := range trainer.GetLivePokemon() {
+		options = append(options, p.Name)
+	}
+	b.MsgChan <- BattleMessage{Type: BattleMsgSelect, Subject: trainer.Name, Options: options}
+
+	selected := <-b.MsgChan
+	for i, p := range trainer.Pokemon {
+		if p.Name == selected.Message {
+			return &trainer.Pokemon[i]
 		}
 	}
+	return &trainer.Pokemon[0]
+}
+
+func (t *Trainer) GetLivePokemon() []pokeutils.Pokemon {
+	livePokemon := make([]pokeutils.Pokemon, 0, len(t.Pokemon))
+	for _, p := range t.Pokemon {
+		if p.Stats.Hp > 0 {
+			livePokemon = append(livePokemon, p)
+		}
+	}
+	return livePokemon
 }
 
 func selectMove(p *pokeutils.Pokemon) (pokeutils.Move, bool) {
