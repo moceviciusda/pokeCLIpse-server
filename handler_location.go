@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/pokebattle"
+	"github.com/moceviciusda/pokeCLIpse-server/pkg/ansiiutils"
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
@@ -350,13 +351,13 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			case pokebattle.BattleMsgInfo:
 				var color string
 				if battleMsg.Subject == user.Username {
-					color = ColorGreen
+					color = ansiiutils.ColorGreen
 				} else if battleMsg.Subject == "Wild" {
-					color = ColorRed
+					color = ansiiutils.ColorRed
 				} else {
-					color = ColorYellow
+					color = ansiiutils.ColorYellow
 				}
-				conn.WriteJSON(message{Message: color + battleMsg.Message})
+				conn.WriteJSON(message{Message: color + battleMsg.Message + ansiiutils.Reset})
 
 			case pokebattle.BattleMsgSelect:
 				conn.WriteJSON(message{Message: "Select a pokemon", Options: battleMsg.Options})
