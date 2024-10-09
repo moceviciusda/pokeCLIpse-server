@@ -2,21 +2,23 @@ package pokebattle
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"time"
 
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
-type Trainer struct {
-	Name          string
-	Pokemon       []pokeutils.Pokemon
-	ActivePokemon *pokeutils.Pokemon
+type Pokemon struct {
+	pokeutils.Pokemon
+	ExpGain int
+	BaseExp int
 }
 
-type PokemonState struct {
-	HP, Attack, Defense, SpecialAttack, SpecialDefense, Speed int
+type Trainer struct {
+	Name          string
+	Pokemon       []Pokemon
+	activePokemon *Pokemon
+	participants  []*Pokemon
 }
 
 const (
@@ -40,8 +42,10 @@ type Battle struct {
 }
 
 func NewBattle(trainer1, trainer2 Trainer, msgChan chan BattleMessage) *Battle {
-	trainer1.ActivePokemon = &trainer1.Pokemon[0]
-	trainer2.ActivePokemon = &trainer2.Pokemon[0]
+	trainer1.activePokemon = &trainer1.Pokemon[0]
+	trainer1.participants = []*Pokemon{&trainer1.Pokemon[0]}
+	trainer2.activePokemon = &trainer2.Pokemon[0]
+	trainer2.participants = []*Pokemon{&trainer2.Pokemon[0]}
 	return &Battle{
 		Trainers: [2]Trainer{trainer1, trainer2},
 		MsgChan:  msgChan,
@@ -61,13 +65,13 @@ func (b *Battle) calculateTickers() {
 	b.stopTickers()
 
 	var pokemon1AttackTimeout, pokemon2AttackTimeout float64 = 5, 5
-	if b.Trainers[0].ActivePokemon.Stats.Speed > b.Trainers[1].ActivePokemon.Stats.Speed {
-		pokemon1AttackTimeout = float64(b.Trainers[1].ActivePokemon.Stats.Speed) / float64(b.Trainers[0].ActivePokemon.Stats.Speed) * 5
+	if b.Trainers[0].activePokemon.Stats.Speed > b.Trainers[1].activePokemon.Stats.Speed {
+		pokemon1AttackTimeout = float64(b.Trainers[1].activePokemon.Stats.Speed) / float64(b.Trainers[0].activePokemon.Stats.Speed) * 5
 		if pokemon1AttackTimeout < 2 {
 			pokemon1AttackTimeout = 2
 		}
 	} else {
-		pokemon2AttackTimeout = float64(b.Trainers[0].ActivePokemon.Stats.Speed) / float64(b.Trainers[1].ActivePokemon.Stats.Speed) * 5
+		pokemon2AttackTimeout = float64(b.Trainers[0].activePokemon.Stats.Speed) / float64(b.Trainers[1].activePokemon.Stats.Speed) * 5
 		if pokemon2AttackTimeout < 2 {
 			pokemon2AttackTimeout = 2
 		}
@@ -92,32 +96,42 @@ func (b *Battle) Run() {
 	trainer2 := &b.Trainers[1]
 
 	if trainer2.Name == "Wild" {
-		b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: "A wild " + trainer2.ActivePokemon.Name + " appeared!"}
+		b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: "A wild " + trainer2.activePokemon.Name + " appeared!"}
 	} else {
-		b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " sent out " + trainer2.ActivePokemon.Name + "!"}
+		b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " sent out " + trainer2.activePokemon.Name + "!"}
 	}
-	b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " sent out " + trainer1.ActivePokemon.Name + "!"}
+	b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " sent out " + trainer1.activePokemon.Name + "!"}
 
 	b.calculateTickers()
 
 	for {
 		select {
 		case <-b.pokemon1Ticker.C:
-			msg, err := attack(trainer1.ActivePokemon, trainer2.ActivePokemon)
+			msg, err := attack(trainer1.activePokemon, trainer2.activePokemon)
 			if err != nil {
-				trainer1.ActivePokemon.Stats.Hp = 0
+				trainer1.activePokemon.Stats.Hp = 0
+				msg = err.Error()
 			}
 			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: msg, Subject: trainer1.Name}
 		case <-b.pokemon2Ticker.C:
-			msg, err := attack(trainer2.ActivePokemon, trainer1.ActivePokemon)
+			msg, err := attack(trainer2.activePokemon, trainer1.activePokemon)
 			if err != nil {
-				trainer2.ActivePokemon.Stats.Hp = 0
+				trainer2.activePokemon.Stats.Hp = 0
+				msg = err.Error()
 			}
 			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: msg, Subject: trainer2.Name}
 		}
 
-		if trainer1.ActivePokemon.Stats.Hp <= 0 {
-			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + "'s " + trainer1.ActivePokemon.Name + " fainted!"}
+		if trainer1.activePokemon.Stats.Hp <= 0 {
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + "'s " + trainer1.activePokemon.Name + " fainted!"}
+
+			expYield := pokeutils.ExpYield(trainer2.activePokemon.BaseExp, trainer1.activePokemon.Level)
+			for _, p := range trainer2.participants {
+				p.ExpGain += expYield / len(trainer2.participants)
+				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: p.Name + " gained " + fmt.Sprint(expYield/len(trainer2.participants)) + " experience!"}
+			}
+			trainer2.participants = []*Pokemon{trainer2.activePokemon}
+
 			pokemon := trainer1.GetLivePokemon()
 			if len(pokemon) == 0 {
 				b.Winner = trainer2
@@ -125,13 +139,23 @@ func (b *Battle) Run() {
 				return
 			}
 
-			trainer1.ActivePokemon = b.SelectPokemon(*trainer1)
-			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " sent out " + trainer1.ActivePokemon.Name + "!"}
+			trainer1.activePokemon = b.SelectPokemon(*trainer1)
+			trainer1.participants = append(trainer1.participants, trainer1.activePokemon)
+
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " sent out " + trainer1.activePokemon.Name + "!"}
 			b.calculateTickers()
 		}
 
-		if trainer2.ActivePokemon.Stats.Hp <= 0 {
-			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + "'s " + trainer2.ActivePokemon.Name + " fainted!"}
+		if trainer2.activePokemon.Stats.Hp <= 0 {
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + "'s " + trainer2.activePokemon.Name + " fainted!"}
+
+			expYield := pokeutils.ExpYield(trainer2.activePokemon.BaseExp, trainer2.activePokemon.Level)
+			for _, p := range trainer1.participants {
+				p.ExpGain += expYield / len(trainer1.participants)
+				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: p.Name + " gained " + fmt.Sprint(expYield/len(trainer1.participants)) + " experience!"}
+			}
+			trainer1.participants = []*Pokemon{trainer1.activePokemon}
+
 			pokemon := trainer2.GetLivePokemon()
 			if len(pokemon) == 0 {
 				b.Winner = trainer1
@@ -139,15 +163,17 @@ func (b *Battle) Run() {
 				return
 			}
 
-			trainer2.ActivePokemon = b.SelectPokemon(*trainer2)
-			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " sent out " + trainer2.ActivePokemon.Name + "!"}
+			trainer2.activePokemon = b.SelectPokemon(*trainer2)
+			trainer2.participants = append(trainer2.participants, trainer2.activePokemon)
+
+			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " sent out " + trainer2.activePokemon.Name + "!"}
 			b.calculateTickers()
 		}
 
 	}
 }
 
-func (b *Battle) SelectPokemon(trainer Trainer) *pokeutils.Pokemon {
+func (b *Battle) SelectPokemon(trainer Trainer) *Pokemon {
 	options := make([]string, 0, len(trainer.Pokemon))
 	for _, p := range trainer.GetLivePokemon() {
 		options = append(options, p.Name)
@@ -168,14 +194,15 @@ func (b *Battle) SelectPokemon(trainer Trainer) *pokeutils.Pokemon {
 	// 		}
 	// 	}
 	// case <-time.After(10 * time.Second):
+	// 	fmt.Println(trainer.Name + " did not select a pokemon in time!")
 	// 	b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer.Name + " did not select a pokemon in time!"}
 	// }
 
 	return &trainer.Pokemon[0]
 }
 
-func (t *Trainer) GetLivePokemon() []pokeutils.Pokemon {
-	livePokemon := make([]pokeutils.Pokemon, 0, len(t.Pokemon))
+func (t *Trainer) GetLivePokemon() []Pokemon {
+	livePokemon := make([]Pokemon, 0, len(t.Pokemon))
 	for _, p := range t.Pokemon {
 		if p.Stats.Hp > 0 {
 			livePokemon = append(livePokemon, p)
@@ -184,7 +211,7 @@ func (t *Trainer) GetLivePokemon() []pokeutils.Pokemon {
 	return livePokemon
 }
 
-func selectMove(p *pokeutils.Pokemon) (pokeutils.Move, bool) {
+func selectMove(p *Pokemon) (pokeutils.Move, bool) {
 	validMoves := make([]pokeutils.Move, 0, len(p.Moves))
 	for _, move := range p.Moves {
 		if move.PP > 0 {
@@ -192,7 +219,6 @@ func selectMove(p *pokeutils.Pokemon) (pokeutils.Move, bool) {
 		}
 	}
 	if len(validMoves) == 0 {
-		log.Println(p.Name + " has no moves left!")
 		return pokeutils.Move{}, false
 	}
 
@@ -201,7 +227,7 @@ func selectMove(p *pokeutils.Pokemon) (pokeutils.Move, bool) {
 	return move, true
 }
 
-func attack(attacker, defender *pokeutils.Pokemon) (string, error) {
+func attack(attacker, defender *Pokemon) (string, error) {
 	move, ok := selectMove(attacker)
 	if !ok {
 		return "", fmt.Errorf("%s has no moves left!", attacker.Name)
@@ -211,7 +237,7 @@ func attack(attacker, defender *pokeutils.Pokemon) (string, error) {
 		return fmt.Sprintf("%s used %s but missed!\n", attacker.Name, move.Name), nil
 	}
 
-	damage, flavourText := pokeutils.CalculateDamage(*attacker, *defender, move)
+	damage, flavourText := pokeutils.CalculateDamage(attacker.Pokemon, defender.Pokemon, move)
 	msg := fmt.Sprintf("%s used %s and dealt %d damage to %s\n", attacker.Name, move.Name, damage, defender.Name)
 	if flavourText != "" {
 		msg += flavourText + "\n"

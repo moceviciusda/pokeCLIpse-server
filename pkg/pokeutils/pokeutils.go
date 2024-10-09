@@ -363,3 +363,11 @@ func TypeEffectiveness(moveType, targetType string) float64 {
 
 	return 1.0
 }
+
+func ExpAtLevel(level int) int {
+	return 4 * (level * level * level) / 5
+}
+
+func ExpYield(baseExp, level int) int {
+	return (baseExp * level / 7)
+}

@@ -154,7 +154,10 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		log.Println("Websocket connection with user: " + user.Username + " closed")
+	}()
 
 	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
 
@@ -292,6 +295,8 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 	}
 
 	switch string(msg) {
+	case "run":
+		conn.WriteJSON(errResponse{Error: "You ran away!"})
 	case "battle":
 		dbParty, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
 		if err != nil {
@@ -300,7 +305,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		pokemonParty := make([]pokeutils.Pokemon, 0, len(dbParty))
+		pokemonParty := make([]pokebattle.Pokemon, 0, len(dbParty))
 		for _, pokemon := range dbParty {
 			p, err := cfg.pokeapiClient.GetPokemon(pokemon.Name)
 			if err != nil {
@@ -323,7 +328,8 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				return
 			}
 
-			pokemonParty = append(pokemonParty, makePokemon(p, pokemon, dbMoves, dbIvs))
+			pokemonParty = append(pokemonParty, pokebattle.Pokemon{makePokemon(p, pokemon, dbMoves, dbIvs), 0, p.BaseExperience})
+
 		}
 
 		battle := pokebattle.NewBattle(
@@ -333,7 +339,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			},
 			pokebattle.Trainer{
 				Name:    "Wild",
-				Pokemon: []pokeutils.Pokemon{pokemon},
+				Pokemon: []pokebattle.Pokemon{pokebattle.Pokemon{pokemon, 0, p.BaseExperience}},
 			},
 			make(chan pokebattle.BattleMessage),
 		)
@@ -372,6 +378,12 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				}
 
 				battle.MsgChan <- pokebattle.BattleMessage{Type: pokebattle.BattleMsgAction, Message: string(msg), Subject: user.Username}
+			}
+		}
+
+		for _, p := range battle.Trainers[0].Pokemon {
+			if p.ExpGain > 0 {
+				conn.WriteJSON(message{Message: p.Name + " gained " + strconv.Itoa(p.ExpGain) + " exp!"})
 			}
 		}
 
