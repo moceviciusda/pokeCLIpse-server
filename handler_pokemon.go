@@ -60,14 +60,15 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 	}
 
 	dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
-		ID:        uuid.New(),
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-		OwnerID:   user.ID,
-		Name:      p.Name,
-		Level:     params.Level,
-		Shiny:     params.Shiny,
-		IvsID:     ivs.ID,
+		ID:         uuid.New(),
+		CreatedAt:  time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
+		OwnerID:    user.ID,
+		Name:       p.Name,
+		Experience: int32(pokeutils.ExpAtLevel(int(params.Level))),
+		Level:      params.Level,
+		Shiny:      params.Shiny,
+		IvsID:      ivs.ID,
 	})
 	if err != nil {
 		log.Println("Error creating pokemon: " + err.Error())

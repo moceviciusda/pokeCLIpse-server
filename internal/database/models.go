@@ -42,14 +42,15 @@ type MovesPokemon struct {
 }
 
 type Pokemon struct {
-	ID        uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Name      string
-	Level     int32
-	Shiny     bool
-	IvsID     uuid.UUID
-	OwnerID   uuid.UUID
+	ID         uuid.UUID
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Name       string
+	Experience int32
+	Level      int32
+	Shiny      bool
+	IvsID      uuid.UUID
+	OwnerID    uuid.UUID
 }
 
 type PokemonParty struct {

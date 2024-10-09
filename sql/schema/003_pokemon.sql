@@ -4,6 +4,7 @@ CREATE TABLE pokemon (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     name TEXT NOT NULL,
+    experience INT NOT NULL,
     level INT NOT NULL,
     shiny BOOLEAN NOT NULL,
     

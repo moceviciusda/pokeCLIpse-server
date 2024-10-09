@@ -128,7 +128,6 @@ func (b *Battle) Run() {
 			expYield := pokeutils.ExpYield(trainer2.activePokemon.BaseExp, trainer1.activePokemon.Level)
 			for _, p := range trainer2.participants {
 				p.ExpGain += expYield / len(trainer2.participants)
-				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: p.Name + " gained " + fmt.Sprint(expYield/len(trainer2.participants)) + " experience!"}
 			}
 			trainer2.participants = []*Pokemon{trainer2.activePokemon}
 
@@ -152,7 +151,6 @@ func (b *Battle) Run() {
 			expYield := pokeutils.ExpYield(trainer2.activePokemon.BaseExp, trainer2.activePokemon.Level)
 			for _, p := range trainer1.participants {
 				p.ExpGain += expYield / len(trainer1.participants)
-				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: p.Name + " gained " + fmt.Sprint(expYield/len(trainer1.participants)) + " experience!"}
 			}
 			trainer1.participants = []*Pokemon{trainer1.activePokemon}
 

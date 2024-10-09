@@ -269,9 +269,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 	for _, t := range p.Types {
 		types = append(types, t.Type.Name)
 	}
-
 	ivs := pokeutils.GenerateIVs()
-
 	pokemon := pokeutils.Pokemon{
 		Name:  p.Name,
 		Types: types,
@@ -288,7 +286,6 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		log.Println("Failed to read message: " + err.Error())
 		return
 	}
-
 	if mt != websocket.TextMessage {
 		log.Println("Invalid message type")
 		return
@@ -297,6 +294,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 	switch string(msg) {
 	case "run":
 		conn.WriteJSON(errResponse{Error: "You ran away!"})
+		return
 	case "battle":
 		dbParty, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
 		if err != nil {
@@ -328,8 +326,11 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				return
 			}
 
-			pokemonParty = append(pokemonParty, pokebattle.Pokemon{makePokemon(p, pokemon, dbMoves, dbIvs), 0, p.BaseExperience})
-
+			pokemonParty = append(pokemonParty, pokebattle.Pokemon{
+				Pokemon: makePokemon(p, pokemon, dbMoves, dbIvs),
+				ExpGain: 0,
+				BaseExp: p.BaseExperience,
+			})
 		}
 
 		battle := pokebattle.NewBattle(
@@ -339,7 +340,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			},
 			pokebattle.Trainer{
 				Name:    "Wild",
-				Pokemon: []pokebattle.Pokemon{pokebattle.Pokemon{pokemon, 0, p.BaseExperience}},
+				Pokemon: []pokebattle.Pokemon{{Pokemon: pokemon, ExpGain: 0, BaseExp: p.BaseExperience}},
 			},
 			make(chan pokebattle.BattleMessage),
 		)
@@ -381,100 +382,145 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			}
 		}
 
-		for _, p := range battle.Trainers[0].Pokemon {
-			if p.ExpGain > 0 {
-				conn.WriteJSON(message{Message: p.Name + " gained " + strconv.Itoa(p.ExpGain) + " exp!"})
+		if battle.Winner.Name != user.Username {
+			conn.WriteJSON(message{Message: "You lost!"})
+			return
+		}
+
+		for i, p := range battle.Trainers[0].Pokemon {
+			if p.ExpGain <= 0 {
+				continue
+			}
+
+			conn.WriteJSON(message{Message: p.Pokemon.Name + " gained " + strconv.Itoa(p.ExpGain) + " experience!"})
+
+			dbPokemon := dbParty[i]
+
+			for {
+				expToNextLevel := pokeutils.ExpAtLevel(int(dbPokemon.Level)+1) - int(dbPokemon.Experience)
+				if p.ExpGain < expToNextLevel {
+					dbPokemon.Experience += int32(p.ExpGain)
+					dbPokemon, err = cfg.DB.UpdatePokemonLvlAndExp(r.Context(), database.UpdatePokemonLvlAndExpParams{
+						Level:      dbPokemon.Level,
+						Experience: dbPokemon.Experience,
+						ID:         dbPokemon.ID,
+					})
+					if err != nil {
+						log.Println("Failed to update pokemon experience: " + err.Error())
+					}
+
+					break
+				}
+
+				p.ExpGain -= expToNextLevel
+				dbPokemon.Level++
+				dbPokemon.Experience = 0
+
+				dbPokemon, err = cfg.DB.UpdatePokemonLvlAndExp(r.Context(), database.UpdatePokemonLvlAndExpParams{
+					Level:      dbPokemon.Level,
+					Experience: dbPokemon.Experience,
+					ID:         dbPokemon.ID,
+				})
+				if err != nil {
+					log.Println("Failed to LVL up pokemon: " + err.Error())
+					break
+				}
+
+				conn.WriteJSON(message{Message: dbPokemon.Name + " leveled up and is now lvl " + strconv.Itoa(int(dbPokemon.Level)) + "!"})
 			}
 		}
 
-		if battle.Winner.Name == user.Username {
-			prompt := fmt.Sprintf(pokemon.Name + " is weakened, attempt to catch it?")
-			ownedP, err := cfg.DB.CheckHasPokemon(r.Context(), database.CheckHasPokemonParams{
-				OwnerID: user.ID,
-				Name:    pokemon.Name,
-				Shiny:   pokemon.Shiny,
-			})
-			if err == nil {
-				prompt += fmt.Sprintf("\nYou already have a lvl %d %s. If you catch this one, the old one will be released", ownedP.Level, ownedP.Name)
-			}
+		prompt := fmt.Sprintf(pokemon.Name + " is weakened, attempt to catch it?")
+		ownedP, err := cfg.DB.CheckHasPokemon(r.Context(), database.CheckHasPokemonParams{
+			OwnerID: user.ID,
+			Name:    pokemon.Name,
+			Shiny:   pokemon.Shiny,
+		})
+		if err == nil {
+			prompt += fmt.Sprintf("\nYou already have a lvl %d %s. If you catch this one, the old one will be released", ownedP.Level, ownedP.Name)
+		}
+		conn.WriteJSON(message{Message: prompt, Options: []string{"yes", "no"}})
 
-			conn.WriteJSON(message{Message: prompt, Options: []string{"yes", "no"}})
-
-			_, msg, err := conn.ReadMessage()
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Failed to read message: " + err.Error())
+			return
+		}
+		switch string(msg) {
+		case "no":
+			conn.WriteJSON(message{Message: "You left " + pokemon.Name + " in the wild.."})
+			return
+		case "yes":
+			_, err := cfg.DB.DeletePokemon(r.Context(), ownedP.ID)
 			if err != nil {
-				log.Println("Failed to read message: " + err.Error())
+				log.Println("Failed to delete pokemon: " + err.Error())
+				conn.WriteJSON(message{Message: "Failed to release pokemon"})
 				return
 			}
-			if string(msg) == "yes" {
-				cfg.DB.DeletePokemon(r.Context(), ownedP.ID)
 
-				dbIvs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
-					ID:             uuid.New(),
-					CreatedAt:      time.Now().UTC(),
-					UpdatedAt:      time.Now().UTC(),
-					Hp:             int32(ivs.Hp),
-					Attack:         int32(ivs.Attack),
-					Defense:        int32(ivs.Defense),
-					SpecialAttack:  int32(ivs.SpecialAttack),
-					SpecialDefense: int32(ivs.SpecialDefense),
-					Speed:          int32(ivs.Speed),
+			dbIvs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
+				ID:             uuid.New(),
+				CreatedAt:      time.Now().UTC(),
+				UpdatedAt:      time.Now().UTC(),
+				Hp:             int32(ivs.Hp),
+				Attack:         int32(ivs.Attack),
+				Defense:        int32(ivs.Defense),
+				SpecialAttack:  int32(ivs.SpecialAttack),
+				SpecialDefense: int32(ivs.SpecialDefense),
+				Speed:          int32(ivs.Speed),
+			})
+			if err != nil {
+				log.Println("Failed to create IVs: " + err.Error())
+				conn.WriteJSON(message{Message: "Failed to create IVs: " + err.Error()})
+				return
+			}
+
+			dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
+				ID:         uuid.New(),
+				CreatedAt:  time.Now().UTC(),
+				UpdatedAt:  time.Now().UTC(),
+				OwnerID:    user.ID,
+				Name:       pokemon.Name,
+				Experience: int32(pokeutils.ExpAtLevel(pokemon.Level)),
+				Level:      int32(pokemon.Level),
+				Shiny:      pokemon.Shiny,
+				IvsID:      dbIvs.ID,
+			})
+			if err != nil {
+				log.Println("Failed to create pokemon: " + err.Error())
+				conn.WriteJSON(message{Message: "Failed to create pokemon: " + err.Error()})
+				return
+			}
+
+			for _, move := range pokemon.Moves {
+				_, err = cfg.DB.AddMoveToPokemon(r.Context(), database.AddMoveToPokemonParams{
+					PokemonID: dbPokemon.ID,
+					MoveName:  move.Name,
 				})
 				if err != nil {
-					log.Println("Failed to create IVs: " + err.Error())
-					conn.WriteJSON(message{Message: "Failed to create IVs: " + err.Error()})
+					log.Println("Failed to add move to pokemon: " + err.Error())
+					conn.WriteJSON(message{Message: "Failed to add move to pokemon: " + err.Error()})
 					return
-				}
-
-				dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
-					ID:        uuid.New(),
-					CreatedAt: time.Now().UTC(),
-					UpdatedAt: time.Now().UTC(),
-					OwnerID:   user.ID,
-					Name:      pokemon.Name,
-					Level:     int32(pokemon.Level),
-					Shiny:     pokemon.Shiny,
-					IvsID:     dbIvs.ID,
-				})
-				if err != nil {
-					log.Println("Failed to create pokemon: " + err.Error())
-					conn.WriteJSON(message{Message: "Failed to create pokemon: " + err.Error()})
-					return
-				}
-
-				for _, move := range pokemon.Moves {
-					_, err = cfg.DB.AddMoveToPokemon(r.Context(), database.AddMoveToPokemonParams{
-						PokemonID: dbPokemon.ID,
-						MoveName:  move.Name,
-					})
-					if err != nil {
-						log.Println("Failed to add move to pokemon: " + err.Error())
-						conn.WriteJSON(message{Message: "Failed to add move to pokemon: " + err.Error()})
-						return
-					}
-				}
-
-				conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
-
-				if len(dbParty) < 6 {
-					_, err := cfg.DB.AddPokemonToParty(r.Context(), database.AddPokemonToPartyParams{
-						UserID:    user.ID,
-						PokemonID: dbPokemon.ID,
-						Position:  int32(len(dbParty) + 1),
-					})
-					if err != nil {
-						log.Println("Failed to add pokemon to party: " + err.Error())
-						respondWithError(w, 500, "Failed to add pokemon to party: "+err.Error())
-						return
-					}
 				}
 			}
 
-		} else {
-			conn.WriteJSON(message{Message: "You lost!"})
+			conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
+
+			if len(dbParty) < 6 {
+				_, err := cfg.DB.AddPokemonToParty(r.Context(), database.AddPokemonToPartyParams{
+					UserID:    user.ID,
+					PokemonID: dbPokemon.ID,
+					Position:  int32(len(dbParty) + 1),
+				})
+				if err != nil {
+					log.Println("Failed to add pokemon to party: " + err.Error())
+					respondWithError(w, 500, "Failed to add pokemon to party: "+err.Error())
+					return
+				}
+			}
 		}
 
 	default:
 		log.Println("Invalid message: " + string(msg))
 	}
-
 }

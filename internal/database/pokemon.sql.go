@@ -13,20 +13,21 @@ import (
 )
 
 const createPokemon = `-- name: CreatePokemon :one
-INSERT INTO pokemon (id, created_at, updated_at, name, level, shiny, ivs_id, owner_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, created_at, updated_at, name, level, shiny, ivs_id, owner_id
+INSERT INTO pokemon (id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id
 `
 
 type CreatePokemonParams struct {
-	ID        uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Name      string
-	Level     int32
-	Shiny     bool
-	IvsID     uuid.UUID
-	OwnerID   uuid.UUID
+	ID         uuid.UUID
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Name       string
+	Experience int32
+	Level      int32
+	Shiny      bool
+	IvsID      uuid.UUID
+	OwnerID    uuid.UUID
 }
 
 func (q *Queries) CreatePokemon(ctx context.Context, arg CreatePokemonParams) (Pokemon, error) {
@@ -35,6 +36,7 @@ func (q *Queries) CreatePokemon(ctx context.Context, arg CreatePokemonParams) (P
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.Name,
+		arg.Experience,
 		arg.Level,
 		arg.Shiny,
 		arg.IvsID,
@@ -46,6 +48,7 @@ func (q *Queries) CreatePokemon(ctx context.Context, arg CreatePokemonParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Name,
+		&i.Experience,
 		&i.Level,
 		&i.Shiny,
 		&i.IvsID,
@@ -55,7 +58,7 @@ func (q *Queries) CreatePokemon(ctx context.Context, arg CreatePokemonParams) (P
 }
 
 const deletePokemon = `-- name: DeletePokemon :one
-DELETE FROM pokemon WHERE id = $1 RETURNING id, created_at, updated_at, name, level, shiny, ivs_id, owner_id
+DELETE FROM pokemon WHERE id = $1 RETURNING id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id
 `
 
 func (q *Queries) DeletePokemon(ctx context.Context, id uuid.UUID) (Pokemon, error) {
@@ -66,6 +69,7 @@ func (q *Queries) DeletePokemon(ctx context.Context, id uuid.UUID) (Pokemon, err
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Name,
+		&i.Experience,
 		&i.Level,
 		&i.Shiny,
 		&i.IvsID,
@@ -75,7 +79,7 @@ func (q *Queries) DeletePokemon(ctx context.Context, id uuid.UUID) (Pokemon, err
 }
 
 const getPokemon = `-- name: GetPokemon :one
-SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE id = $1
+SELECT id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id FROM pokemon WHERE id = $1
 `
 
 func (q *Queries) GetPokemon(ctx context.Context, id uuid.UUID) (Pokemon, error) {
@@ -86,6 +90,7 @@ func (q *Queries) GetPokemon(ctx context.Context, id uuid.UUID) (Pokemon, error)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Name,
+		&i.Experience,
 		&i.Level,
 		&i.Shiny,
 		&i.IvsID,
@@ -156,4 +161,31 @@ func (q *Queries) GetPokemonWithIvsByOwnerID(ctx context.Context, ownerID uuid.U
 		return nil, err
 	}
 	return items, nil
+}
+
+const updatePokemonLvlAndExp = `-- name: UpdatePokemonLvlAndExp :one
+UPDATE pokemon SET level = $1, experience = $2 WHERE id = $3 RETURNING id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id
+`
+
+type UpdatePokemonLvlAndExpParams struct {
+	Level      int32
+	Experience int32
+	ID         uuid.UUID
+}
+
+func (q *Queries) UpdatePokemonLvlAndExp(ctx context.Context, arg UpdatePokemonLvlAndExpParams) (Pokemon, error) {
+	row := q.db.QueryRowContext(ctx, updatePokemonLvlAndExp, arg.Level, arg.Experience, arg.ID)
+	var i Pokemon
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Experience,
+		&i.Level,
+		&i.Shiny,
+		&i.IvsID,
+		&i.OwnerID,
+	)
+	return i, err
 }

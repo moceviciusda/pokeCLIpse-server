@@ -32,7 +32,7 @@ func (q *Queries) AddPokemonToParty(ctx context.Context, arg AddPokemonToPartyPa
 }
 
 const checkHasPokemon = `-- name: CheckHasPokemon :one
-SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1 AND name = $2 AND shiny = $3 LIMIT 1
+SELECT id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1 AND name = $2 AND shiny = $3 LIMIT 1
 `
 
 type CheckHasPokemonParams struct {
@@ -49,6 +49,7 @@ func (q *Queries) CheckHasPokemon(ctx context.Context, arg CheckHasPokemonParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Name,
+		&i.Experience,
 		&i.Level,
 		&i.Shiny,
 		&i.IvsID,
@@ -94,7 +95,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const getPokemonInPartyPosition = `-- name: GetPokemonInPartyPosition :one
-SELECT p.id, p.created_at, p.updated_at, p.name, p.level, p.shiny, p.ivs_id, p.owner_id
+SELECT p.id, p.created_at, p.updated_at, p.name, p.experience, p.level, p.shiny, p.ivs_id, p.owner_id
 FROM pokemon p
 JOIN pokemon_party pp ON p.id = pp.pokemon_id
 WHERE pp.user_id = $1 AND pp.position = $2
@@ -113,6 +114,7 @@ func (q *Queries) GetPokemonInPartyPosition(ctx context.Context, arg GetPokemonI
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Name,
+		&i.Experience,
 		&i.Level,
 		&i.Shiny,
 		&i.IvsID,
@@ -122,7 +124,7 @@ func (q *Queries) GetPokemonInPartyPosition(ctx context.Context, arg GetPokemonI
 }
 
 const getPokemonParty = `-- name: GetPokemonParty :many
-SELECT p.id, p.created_at, p.updated_at, p.name, p.level, p.shiny, p.ivs_id, p.owner_id
+SELECT p.id, p.created_at, p.updated_at, p.name, p.experience, p.level, p.shiny, p.ivs_id, p.owner_id
 FROM pokemon p
 JOIN pokemon_party pp ON p.id = pp.pokemon_id
 WHERE pp.user_id = $1
@@ -143,6 +145,7 @@ func (q *Queries) GetPokemonParty(ctx context.Context, userID uuid.UUID) ([]Poke
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Name,
+			&i.Experience,
 			&i.Level,
 			&i.Shiny,
 			&i.IvsID,
@@ -198,7 +201,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const getUserPokemon = `-- name: GetUserPokemon :many
-SELECT id, created_at, updated_at, name, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1
+SELECT id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id FROM pokemon WHERE owner_id = $1
 `
 
 func (q *Queries) GetUserPokemon(ctx context.Context, ownerID uuid.UUID) ([]Pokemon, error) {
@@ -215,6 +218,7 @@ func (q *Queries) GetUserPokemon(ctx context.Context, ownerID uuid.UUID) ([]Poke
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Name,
+			&i.Experience,
 			&i.Level,
 			&i.Shiny,
 			&i.IvsID,

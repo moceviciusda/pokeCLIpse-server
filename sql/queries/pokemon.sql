@@ -1,7 +1,11 @@
 -- name: CreatePokemon :one
-INSERT INTO pokemon (id, created_at, updated_at, name, level, shiny, ivs_id, owner_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO pokemon (id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
+
+-- name: UpdatePokemonLvlAndExp :one
+UPDATE pokemon SET level = $1, experience = $2 WHERE id = $3 RETURNING *;
+
 
 -- name: GetPokemonWithIvsByOwnerID :many
 SELECT 
