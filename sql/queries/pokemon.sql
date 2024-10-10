@@ -6,6 +6,8 @@ RETURNING *;
 -- name: UpdatePokemonLvlAndExp :one
 UPDATE pokemon SET level = $1, experience = $2 WHERE id = $3 RETURNING *;
 
+-- name: UpdatePokemonName :one
+UPDATE pokemon SET name = $1 WHERE id = $2 RETURNING *;
 
 -- name: GetPokemonWithIvsByOwnerID :many
 SELECT 

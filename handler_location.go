@@ -381,6 +381,19 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 			dbPokemon := dbParty[i]
 			dbPokemon, movesChanged := cfg.resolveExpGains(dbPokemon, &pokemon, conn)
+
+			if pokemon.Name != dbPokemon.Name {
+				dbPokemon, err = cfg.DB.UpdatePokemonName(r.Context(), database.UpdatePokemonNameParams{
+					Name: dbPokemon.Name,
+					ID:   dbPokemon.ID,
+				})
+				if err != nil {
+					log.Println("Failed to update pokemon name: " + err.Error())
+					conn.WriteJSON(message{Message: "Failed to evolve pokemon"})
+					continue
+				}
+				pokemon.Name = dbPokemon.Name
+			}
 			dbPokemon, err = cfg.DB.UpdatePokemonLvlAndExp(r.Context(), database.UpdatePokemonLvlAndExpParams{
 				Level:      dbPokemon.Level,
 				Experience: dbPokemon.Experience,
@@ -577,20 +590,34 @@ func (cfg *apiConfig) resolveExpGains(dbPokemon database.Pokemon, pokemon *pokeb
 			continue
 		}
 
-		conn.WriteJSON(message{Message: ansiiutils.StyleBlink + dbPokemon.Name + " is evolving!" + ansiiutils.Reset})
-		// TODO: Implement evolution rejection
-		dbPokemon.Name = evolvesTo
+		conn.WriteJSON(message{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " is evolving!"})
+		conn.WriteJSON(message{Message: "Would you like to stop the evolution?", Options: []string{"yes", "no"}})
+		mt, msg, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Failed to read message: " + err.Error())
+			continue
+		}
+		if mt != websocket.TextMessage {
+			log.Println("Invalid message type")
+			continue
+		}
+		if string(msg) == "yes" {
+			conn.WriteJSON(message{Message: "Evolution stopped"})
+			continue
+		}
+
 		p, err := cfg.pokeapiClient.GetPokemon(evolvesTo)
 		if err != nil {
 			log.Println("Failed to get pokemon: " + err.Error())
-			return dbPokemon, movesChanged
+			continue
 		}
-		conn.WriteJSON(message{Message: dbPokemon.Name + " evolved into " + evolvesTo + "!"})
+		conn.WriteJSON(message{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " evolved into " + ansiiutils.StyleItalic + evolvesTo + ansiiutils.Reset + "!\n"})
+		dbPokemon.Name = evolvesTo
 
 		movesToLearn, err = cfg.pokeapiClient.GetMovesLearnedAtLvl(p.Name, int(dbPokemon.Level))
 		if err != nil {
 			log.Println("Failed to get moves learned at lvl: " + err.Error())
-			return dbPokemon, movesChanged
+			continue
 		}
 		movesChanged = moveLearnLoop(conn, movesToLearn, pokemon)
 	}

@@ -189,3 +189,29 @@ func (q *Queries) UpdatePokemonLvlAndExp(ctx context.Context, arg UpdatePokemonL
 	)
 	return i, err
 }
+
+const updatePokemonName = `-- name: UpdatePokemonName :one
+UPDATE pokemon SET name = $1 WHERE id = $2 RETURNING id, created_at, updated_at, name, experience, level, shiny, ivs_id, owner_id
+`
+
+type UpdatePokemonNameParams struct {
+	Name string
+	ID   uuid.UUID
+}
+
+func (q *Queries) UpdatePokemonName(ctx context.Context, arg UpdatePokemonNameParams) (Pokemon, error) {
+	row := q.db.QueryRowContext(ctx, updatePokemonName, arg.Name, arg.ID)
+	var i Pokemon
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Experience,
+		&i.Level,
+		&i.Shiny,
+		&i.IvsID,
+		&i.OwnerID,
+	)
+	return i, err
+}
