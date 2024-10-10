@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/database"
+	"github.com/moceviciusda/pokeCLIpse-server/internal/pokeapi"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/pokebattle"
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/ansiiutils"
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
@@ -513,27 +514,116 @@ func (cfg *apiConfig) resolveExpGains(dbPokemon database.Pokemon, pokemon *pokeb
 		conn.WriteJSON(errResponse{Error: "Failed to level up pokemon: " + err.Error()})
 		return dbPokemon
 	}
+	pSpecies, err := cfg.pokeapiClient.GetPokemonSpecies(p.Species.Name, p.Species.URL)
+	if err != nil {
+		log.Println("Failed to get pokemon species: " + err.Error())
+		conn.WriteJSON(errResponse{Error: "Failed to level up pokemon: " + err.Error()})
+		return dbPokemon
+	}
+	evolutionChain, err := cfg.pokeapiClient.GetEvolutionChain(pSpecies.EvolutionChain.URL)
+	if err != nil {
+		log.Println("Failed to get evolution chain: " + err.Error())
+		conn.WriteJSON(errResponse{Error: "Failed to level up pokemon: " + err.Error()})
+		return dbPokemon
+	}
+
+	var evolvesAt int
+	var evolvesTo string
+	for _, e := range findEvolutionOptions(evolutionChain.Chain, dbPokemon.Name) {
+		for _, opt := range e.EvolutionDetails {
+			if opt.Trigger.Name != "level-up" {
+				continue
+			}
+			evolvesAt = opt.MinLevel
+			evolvesTo = e.Species.Name
+		}
+	}
 
 	for dbPokemon.Level < int32(expectedLevel) {
 		dbPokemon.Level++
 
-		movesLearned := make([]string, 0)
+		// movesLearned := make([]string, 0)
 		for _, move := range p.Moves {
+			known := false
+			for _, knownMove := range pokemon.Moves {
+				if move.Move.Name == knownMove.Name {
+					known = true
+					break
+				}
+			}
+			if known {
+				continue
+			}
+
 			for _, mDetails := range move.VersionGroupDetails {
 				if mDetails.MoveLearnMethod.Name == "level-up" && mDetails.LevelLearnedAt == int(dbPokemon.Level) {
-					movesLearned = append(movesLearned, move.Move.Name)
+					// movesLearned = append(movesLearned, move.Move.Name)
+					conn.WriteJSON(message{Message: dbPokemon.Name + " is trying to learn " + move.Move.Name + "!"})
+					break
 				}
 			}
 		}
 
 		conn.WriteJSON(message{Message: dbPokemon.Name + " leveled up and is now lvl " + strconv.Itoa(int(dbPokemon.Level)) + "!"})
-		if len(movesLearned) > 0 {
-			conn.WriteJSON(message{Message: dbPokemon.Name + " learned " + movesLearned[0] + "!"})
+
+		// TODO: Implement Actual moves learning
+		// if len(movesLearned) > 0 {
+		// conn.WriteJSON(message{Message: dbPokemon.Name + " learned " + movesLearned[0] + "!"})
+		// }
+
+		if evolvesTo != "" && int(dbPokemon.Level) < evolvesAt {
+			continue
 		}
 
-		// if p.Forms
+		conn.WriteJSON(message{Message: ansiiutils.StyleBlink + dbPokemon.Name + " is evolving!" + ansiiutils.Reset})
+		// TODO: Implement evolution rejection
+		dbPokemon.Name = evolvesTo
+		p, err := cfg.pokeapiClient.GetPokemon(evolvesTo)
+		if err != nil {
+			log.Println("Failed to get pokemon: " + err.Error())
+			conn.WriteJSON(errResponse{Error: "Failed to evolve pokemon: " + err.Error()})
+			return dbPokemon
+		}
+		conn.WriteJSON(message{Message: dbPokemon.Name + " evolved into " + evolvesTo + "!"})
+
+		// movesLearned = make([]string, 0)
+		for _, move := range p.Moves {
+			known := false
+			for _, knownMove := range pokemon.Moves {
+				if move.Move.Name == knownMove.Name {
+					known = true
+					break
+				}
+			}
+			if known {
+				continue
+			}
+
+			for _, mDetails := range move.VersionGroupDetails {
+				if mDetails.LevelLearnedAt == int(dbPokemon.Level) {
+					// movesLearned = append(movesLearned, move.Move.Name)
+					conn.WriteJSON(message{Message: dbPokemon.Name + " is trying to learn " + move.Move.Name + "!"})
+					break
+				}
+			}
+		}
+		// conn.WriteJSON(message{Message: dbPokemon.Name + " learned " + movesLearned[0] + "!"})
 
 	}
 
 	return dbPokemon
+}
+
+func findEvolutionOptions(evolutionChain pokeapi.EvolutionChainLink, pokemonName string) []pokeapi.EvolutionChainLink {
+	if evolutionChain.Species.Name == pokemonName {
+		return evolutionChain.EvolvesTo
+	}
+
+	for _, chain := range evolutionChain.EvolvesTo {
+		if opts := findEvolutionOptions(chain, pokemonName); opts != nil {
+			return opts
+		}
+	}
+
+	return nil
 }
