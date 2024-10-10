@@ -16,3 +16,11 @@ WHERE mp.pokemon_id = $1;
 INSERT INTO moves_pokemon (move_name, pokemon_id)
 VALUES ($1, $2)
 RETURNING *;
+
+-- name: RemoveMoveFromPokemon :exec
+DELETE FROM moves_pokemon
+WHERE move_name = $1 AND pokemon_id = $2;
+
+-- name: RemoveAllMovesFromPokemon :exec
+DELETE FROM moves_pokemon
+WHERE pokemon_id = $1;

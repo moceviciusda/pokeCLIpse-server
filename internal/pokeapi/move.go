@@ -86,3 +86,27 @@ func (c *Client) SelectRandomMoves(pokemonNameOrId string, level int) ([]MoveRes
 
 	return moves, nil
 }
+
+func (c *Client) GetMovesLearnedAtLvl(pokemonNameOrId string, level int) (map[string]MoveResponse, error) {
+	pokemon, err := c.GetPokemon(pokemonNameOrId)
+	if err != nil {
+		return nil, err
+	}
+
+	movesLearned := make(map[string]MoveResponse)
+	for _, move := range pokemon.Moves {
+		for _, details := range move.VersionGroupDetails {
+			if details.LevelLearnedAt == level {
+				m, err := c.GetMove(move.Move.Name)
+				if err != nil {
+					return nil, err
+				}
+
+				movesLearned[move.Move.Name] = m
+				break
+			}
+		}
+	}
+
+	return movesLearned, nil
+}

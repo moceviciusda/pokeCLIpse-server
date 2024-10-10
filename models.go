@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,4 +83,34 @@ func makePokemon(p pokeapi.PokemonResponse, dbPokemon database.Pokemon, moves []
 		Stats: pokeutils.CalculateStats(baseStats, ivs, int(dbPokemon.Level)),
 		Moves: pokemonMoves,
 	}
+}
+
+func (cfg *apiConfig) getMoveFromDbOrApi(r *http.Request, name string) (database.Move, error) {
+	dbMove, err := cfg.DB.GetMoveByName(r.Context(), name)
+	if err != nil {
+		m, err := cfg.pokeapiClient.GetMove(name)
+		if err != nil {
+			return database.Move{}, err
+		}
+
+		dbMove, err = cfg.DB.CreateMove(r.Context(), database.CreateMoveParams{
+			ID:           uuid.New(),
+			CreatedAt:    time.Now().UTC(),
+			UpdatedAt:    time.Now().UTC(),
+			Name:         m.Name,
+			Accuracy:     int32(m.Accuracy),
+			Power:        int32(m.Power),
+			Pp:           int32(m.Pp),
+			Type:         m.Type.Name,
+			DamageClass:  m.DamageClass.Name,
+			EffectChance: int32(m.EffectChance),
+			Effect:       m.EffectEntries[0].ShortEffect,
+		})
+		if err != nil {
+			log.Println("Failed to create move: " + err.Error())
+			return database.Move{}, err
+		}
+	}
+
+	return dbMove, nil
 }

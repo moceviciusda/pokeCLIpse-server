@@ -184,6 +184,8 @@ func (b *Battle) SelectPokemon(trainer Trainer) *Pokemon {
 			return &trainer.Pokemon[i]
 		}
 	}
+	// TODO: Implement timeout for PVP battles
+
 	// select {
 	// case selected := <-b.MsgChan:
 	// 	for i, p := range trainer.Pokemon {

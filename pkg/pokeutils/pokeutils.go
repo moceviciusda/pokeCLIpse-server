@@ -53,6 +53,27 @@ const (
 	IconFairy    = "✨"
 )
 
+var TypeIcons = map[string]string{
+	"normal":   IconNormal,
+	"fighting": IconFighting,
+	"flying":   IconFlying,
+	"poison":   IconPoison,
+	"ground":   IconGround,
+	"rock":     IconRock,
+	"bug":      IconBug,
+	"ghost":    IconGhost,
+	"steel":    IconSteel,
+	"fire":     IconFire,
+	"water":    IconWater,
+	"grass":    IconGrass,
+	"electric": IconElectric,
+	"psychic":  IconPsychic,
+	"ice":      IconIce,
+	"dragon":   IconDragon,
+	"dark":     IconDark,
+	"fairy":    IconFairy,
+}
+
 var Starters = []string{
 	"Bulbasaur",
 	"Charmander",

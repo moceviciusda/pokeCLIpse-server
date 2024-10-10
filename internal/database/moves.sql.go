@@ -145,3 +145,28 @@ func (q *Queries) GetMovesByPokemonID(ctx context.Context, pokemonID uuid.UUID) 
 	}
 	return items, nil
 }
+
+const removeAllMovesFromPokemon = `-- name: RemoveAllMovesFromPokemon :exec
+DELETE FROM moves_pokemon
+WHERE pokemon_id = $1
+`
+
+func (q *Queries) RemoveAllMovesFromPokemon(ctx context.Context, pokemonID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, removeAllMovesFromPokemon, pokemonID)
+	return err
+}
+
+const removeMoveFromPokemon = `-- name: RemoveMoveFromPokemon :exec
+DELETE FROM moves_pokemon
+WHERE move_name = $1 AND pokemon_id = $2
+`
+
+type RemoveMoveFromPokemonParams struct {
+	MoveName  string
+	PokemonID uuid.UUID
+}
+
+func (q *Queries) RemoveMoveFromPokemon(ctx context.Context, arg RemoveMoveFromPokemonParams) error {
+	_, err := q.db.ExecContext(ctx, removeMoveFromPokemon, arg.MoveName, arg.PokemonID)
+	return err
+}
