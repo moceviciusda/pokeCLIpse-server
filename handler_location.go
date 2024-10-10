@@ -614,6 +614,17 @@ func findEvolutionOptions(evolutionChain pokeapi.EvolutionChainLink, pokemonName
 
 func moveLearnLoop(conn *websocket.Conn, movesToLearn map[string]pokeapi.MoveResponse, pokemon *pokebattle.Pokemon) (movesChanged bool) {
 	for moveName, m := range movesToLearn {
+		knowsMove := false
+		for _, pM := range pokemon.Moves {
+			if pM.Name == m.Name {
+				knowsMove = true
+				break
+			}
+		}
+		if knowsMove {
+			continue
+		}
+
 		typeIcon := pokeutils.TypeIcons[m.Type.Name]
 
 		if len(pokemon.Moves) < 4 {
