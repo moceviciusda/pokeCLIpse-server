@@ -22,6 +22,12 @@ type locationInfo struct {
 	Previous string `json:"previous"`
 }
 
+type message struct {
+	Error   string   `json:"error"`
+	Message string   `json:"message"`
+	Options []string `json:"options"`
+}
+
 func (cfg *apiConfig) hadlerGetUserLocation(w http.ResponseWriter, r *http.Request, user database.User) {
 	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
 
@@ -345,12 +351,6 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			make(chan pokebattle.BattleMessage),
 		)
 
-		type message struct {
-			Error   string   `json:"error"`
-			Message string   `json:"message"`
-			Options []string `json:"options"`
-		}
-
 		go battle.Run()
 
 		for battleMsg := range battle.MsgChan {
@@ -387,46 +387,22 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		for i, p := range battle.Trainers[0].Pokemon {
-			if p.ExpGain <= 0 {
+		for i, pokemon := range battle.Trainers[0].Pokemon {
+			if pokemon.ExpGain <= 0 {
 				continue
 			}
-
-			conn.WriteJSON(message{Message: p.Pokemon.Name + " gained " + strconv.Itoa(p.ExpGain) + " experience!"})
+			conn.WriteJSON(message{Message: ansiiutils.StyleItalic + pokemon.Pokemon.Name + " gained " + strconv.Itoa(pokemon.ExpGain) + " exp" + ansiiutils.Reset})
 
 			dbPokemon := dbParty[i]
-
-			for {
-				expToNextLevel := pokeutils.ExpAtLevel(int(dbPokemon.Level)+1) - int(dbPokemon.Experience)
-				if p.ExpGain < expToNextLevel {
-					dbPokemon.Experience += int32(p.ExpGain)
-					dbPokemon, err = cfg.DB.UpdatePokemonLvlAndExp(r.Context(), database.UpdatePokemonLvlAndExpParams{
-						Level:      dbPokemon.Level,
-						Experience: dbPokemon.Experience,
-						ID:         dbPokemon.ID,
-					})
-					if err != nil {
-						log.Println("Failed to update pokemon experience: " + err.Error())
-					}
-
-					break
-				}
-
-				p.ExpGain -= expToNextLevel
-				dbPokemon.Level++
-				dbPokemon.Experience = 0
-
-				dbPokemon, err = cfg.DB.UpdatePokemonLvlAndExp(r.Context(), database.UpdatePokemonLvlAndExpParams{
-					Level:      dbPokemon.Level,
-					Experience: dbPokemon.Experience,
-					ID:         dbPokemon.ID,
-				})
-				if err != nil {
-					log.Println("Failed to LVL up pokemon: " + err.Error())
-					break
-				}
-
-				conn.WriteJSON(message{Message: dbPokemon.Name + " leveled up and is now lvl " + strconv.Itoa(int(dbPokemon.Level)) + "!"})
+			dbPokemon = cfg.resolveExpGains(dbPokemon, &pokemon, conn)
+			dbPokemon, err = cfg.DB.UpdatePokemonLvlAndExp(r.Context(), database.UpdatePokemonLvlAndExpParams{
+				Level:      dbPokemon.Level,
+				Experience: dbPokemon.Experience,
+				ID:         dbPokemon.ID,
+			})
+			if err != nil {
+				log.Println("Failed to LVL up pokemon: " + err.Error())
+				break
 			}
 		}
 
@@ -474,7 +450,6 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				conn.WriteJSON(message{Message: "Failed to create IVs: " + err.Error()})
 				return
 			}
-
 			dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
 				ID:         uuid.New(),
 				CreatedAt:  time.Now().UTC(),
@@ -491,7 +466,6 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				conn.WriteJSON(message{Message: "Failed to create pokemon: " + err.Error()})
 				return
 			}
-
 			for _, move := range pokemon.Moves {
 				_, err = cfg.DB.AddMoveToPokemon(r.Context(), database.AddMoveToPokemonParams{
 					PokemonID: dbPokemon.ID,
@@ -523,4 +497,43 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 	default:
 		log.Println("Invalid message: " + string(msg))
 	}
+}
+
+func (cfg *apiConfig) resolveExpGains(dbPokemon database.Pokemon, pokemon *pokebattle.Pokemon, conn *websocket.Conn) database.Pokemon {
+	dbPokemon.Experience += int32(pokemon.ExpGain)
+
+	expectedLevel := pokeutils.LevelAtExp(int(dbPokemon.Experience))
+	if dbPokemon.Level >= 100 || dbPokemon.Level >= int32(expectedLevel) {
+		return dbPokemon
+	}
+
+	p, err := cfg.pokeapiClient.GetPokemon(dbPokemon.Name)
+	if err != nil {
+		log.Println("Failed to get pokemon: " + err.Error())
+		conn.WriteJSON(errResponse{Error: "Failed to level up pokemon: " + err.Error()})
+		return dbPokemon
+	}
+
+	for dbPokemon.Level < int32(expectedLevel) {
+		dbPokemon.Level++
+
+		movesLearned := make([]string, 0)
+		for _, move := range p.Moves {
+			for _, mDetails := range move.VersionGroupDetails {
+				if mDetails.MoveLearnMethod.Name == "level-up" && mDetails.LevelLearnedAt == int(dbPokemon.Level) {
+					movesLearned = append(movesLearned, move.Move.Name)
+				}
+			}
+		}
+
+		conn.WriteJSON(message{Message: dbPokemon.Name + " leveled up and is now lvl " + strconv.Itoa(int(dbPokemon.Level)) + "!"})
+		if len(movesLearned) > 0 {
+			conn.WriteJSON(message{Message: dbPokemon.Name + " learned " + movesLearned[0] + "!"})
+		}
+
+		// if p.Forms
+
+	}
+
+	return dbPokemon
 }

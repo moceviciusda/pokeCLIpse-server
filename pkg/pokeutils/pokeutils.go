@@ -2,6 +2,7 @@ package pokeutils
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 )
@@ -366,6 +367,10 @@ func TypeEffectiveness(moveType, targetType string) float64 {
 
 func ExpAtLevel(level int) int {
 	return 4 * (level * level * level) / 5
+}
+
+func LevelAtExp(exp int) int {
+	return int(math.Cbrt(float64(5*exp) / 4))
 }
 
 func ExpYield(baseExp, level int) int {
