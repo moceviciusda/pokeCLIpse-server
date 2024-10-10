@@ -428,11 +428,13 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			conn.WriteJSON(message{Message: "You left " + pokemon.Name + " in the wild.."})
 			return
 		case "yes":
-			_, err := cfg.DB.DeletePokemon(r.Context(), ownedP.ID)
-			if err != nil {
-				log.Println("Failed to delete pokemon: " + err.Error())
-				conn.WriteJSON(message{Message: "Failed to release pokemon"})
-				return
+			if ownedP.ID != uuid.Nil {
+				_, err := cfg.DB.DeletePokemon(r.Context(), ownedP.ID)
+				if err != nil {
+					log.Println("Failed to delete pokemon: " + err.Error())
+					conn.WriteJSON(message{Message: "Failed to release pokemon"})
+					return
+				}
 			}
 
 			dbIvs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
