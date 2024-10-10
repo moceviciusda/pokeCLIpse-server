@@ -23,7 +23,7 @@ type locationInfo struct {
 	Previous string `json:"previous"`
 }
 
-type message struct {
+type wsMessage struct {
 	Error   string   `json:"error"`
 	Message string   `json:"message"`
 	Options []string `json:"options"`
@@ -148,7 +148,7 @@ func (cfg *apiConfig) handlerPreviousLocation(w http.ResponseWriter, r *http.Req
 }
 
 func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Request, user database.User) {
-	log.Println("Websocket connection with user: " + user.Username + " established")
+	log.Println("location-search websocket connection with user: " + user.Username + " established")
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
@@ -163,7 +163,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 
 	defer func() {
 		conn.Close()
-		log.Println("Websocket connection with user: " + user.Username + " closed")
+		log.Println("location-search websocket connection with user: " + user.Username + " closed")
 	}()
 
 	url := "https://pokeapi.co/api/v2/location-area?offset=" + strconv.Itoa(int(user.LocationOffset)) + "&limit=1"
@@ -350,10 +350,10 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				} else {
 					color = ansiiutils.ColorYellow
 				}
-				conn.WriteJSON(message{Message: color + battleMsg.Message + ansiiutils.Reset})
+				conn.WriteJSON(wsMessage{Message: color + battleMsg.Message + ansiiutils.Reset})
 
 			case pokebattle.BattleMsgSelect:
-				conn.WriteJSON(message{Message: "Select a pokemon", Options: battleMsg.Options})
+				conn.WriteJSON(wsMessage{Message: "Select a pokemon", Options: battleMsg.Options})
 				mt, msg, err := conn.ReadMessage()
 				if err != nil {
 					log.Println("Failed to read message: " + err.Error())
@@ -369,7 +369,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		}
 
 		if battle.Winner.Name != user.Username {
-			conn.WriteJSON(message{Message: "You lost!"})
+			conn.WriteJSON(wsMessage{Message: "You lost!"})
 			return
 		}
 
@@ -377,7 +377,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			if pokemon.ExpGain <= 0 {
 				continue
 			}
-			conn.WriteJSON(message{Message: ansiiutils.StyleItalic + pokemon.Pokemon.Name + " gained " + strconv.Itoa(pokemon.ExpGain) + " exp" + ansiiutils.Reset})
+			conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + pokemon.Pokemon.Name + " gained " + strconv.Itoa(pokemon.ExpGain) + " exp" + ansiiutils.Reset})
 
 			dbPokemon := dbParty[i]
 			dbPokemon, movesChanged := cfg.resolveExpGains(dbPokemon, &pokemon, conn)
@@ -389,7 +389,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				})
 				if err != nil {
 					log.Println("Failed to update pokemon name: " + err.Error())
-					conn.WriteJSON(message{Message: "Failed to evolve pokemon"})
+					conn.WriteJSON(wsMessage{Message: "Failed to evolve pokemon"})
 					continue
 				}
 				pokemon.Name = dbPokemon.Name
@@ -417,14 +417,14 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				}
 			}
 			if !success {
-				conn.WriteJSON(message{Message: "Failed to learn new moves"})
+				conn.WriteJSON(wsMessage{Message: "Failed to learn new moves"})
 				continue
 			}
 
 			err = cfg.DB.RemoveAllMovesFromPokemon(r.Context(), dbPokemon.ID)
 			if err != nil {
 				log.Println("Failed to delete pokemon moves: " + err.Error())
-				conn.WriteJSON(message{Message: "Failed to learn new moves"})
+				conn.WriteJSON(wsMessage{Message: "Failed to learn new moves"})
 				continue
 			}
 			for _, move := range pokemon.Moves {
@@ -434,7 +434,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				})
 				if err != nil {
 					log.Println("Failed to add move to pokemon: " + err.Error())
-					conn.WriteJSON(message{Message: "Failed to learn new moves"})
+					conn.WriteJSON(wsMessage{Message: "Failed to learn new moves"})
 					continue
 				}
 			}
@@ -449,7 +449,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		if err == nil {
 			prompt += fmt.Sprintf("\nYou already have a lvl %d %s. If you catch this one, the old one will be released", ownedP.Level, ownedP.Name)
 		}
-		conn.WriteJSON(message{Message: prompt, Options: []string{"yes", "no"}})
+		conn.WriteJSON(wsMessage{Message: prompt, Options: []string{"yes", "no"}})
 
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -458,14 +458,14 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 		}
 		switch string(msg) {
 		case "no":
-			conn.WriteJSON(message{Message: "You left " + pokemon.Name + " in the wild.."})
+			conn.WriteJSON(wsMessage{Message: "You left " + pokemon.Name + " in the wild.."})
 			return
 		case "yes":
 			if ownedP.ID != uuid.Nil {
 				_, err := cfg.DB.DeletePokemon(r.Context(), ownedP.ID)
 				if err != nil {
 					log.Println("Failed to delete pokemon: " + err.Error())
-					conn.WriteJSON(message{Message: "Failed to release pokemon"})
+					conn.WriteJSON(wsMessage{Message: "Failed to release pokemon"})
 					return
 				}
 			}
@@ -483,7 +483,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			})
 			if err != nil {
 				log.Println("Failed to create IVs: " + err.Error())
-				conn.WriteJSON(message{Message: "Failed to create IVs: " + err.Error()})
+				conn.WriteJSON(wsMessage{Message: "Failed to create IVs: " + err.Error()})
 				return
 			}
 			dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
@@ -499,7 +499,7 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 			})
 			if err != nil {
 				log.Println("Failed to create pokemon: " + err.Error())
-				conn.WriteJSON(message{Message: "Failed to create pokemon: " + err.Error()})
+				conn.WriteJSON(wsMessage{Message: "Failed to create pokemon: " + err.Error()})
 				return
 			}
 			for _, move := range pokemon.Moves {
@@ -509,12 +509,12 @@ func (cfg *apiConfig) handlerSearchForPokemon(w http.ResponseWriter, r *http.Req
 				})
 				if err != nil {
 					log.Println("Failed to add move to pokemon: " + err.Error())
-					conn.WriteJSON(message{Message: "Failed to add move to pokemon: " + err.Error()})
+					conn.WriteJSON(wsMessage{Message: "Failed to add move to pokemon: " + err.Error()})
 					return
 				}
 			}
 
-			conn.WriteJSON(message{Message: "You caught " + pokemon.Name + "!"})
+			conn.WriteJSON(wsMessage{Message: "You caught " + pokemon.Name + "!"})
 
 			if len(dbParty) < 6 {
 				_, err := cfg.DB.AddPokemonToParty(r.Context(), database.AddPokemonToPartyParams{
@@ -576,7 +576,7 @@ func (cfg *apiConfig) resolveExpGains(dbPokemon database.Pokemon, pokemon *pokeb
 
 	for dbPokemon.Level < int32(expectedLevel) {
 		dbPokemon.Level++
-		conn.WriteJSON(message{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " leveled up and is now lvl " + strconv.Itoa(int(dbPokemon.Level)) + "!"})
+		conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " leveled up and is now lvl " + strconv.Itoa(int(dbPokemon.Level)) + "!"})
 
 		movesToLearn, err := cfg.pokeapiClient.GetMovesLearnedAtLvl(p.Name, int(dbPokemon.Level))
 		if err != nil {
@@ -590,8 +590,8 @@ func (cfg *apiConfig) resolveExpGains(dbPokemon database.Pokemon, pokemon *pokeb
 			continue
 		}
 
-		conn.WriteJSON(message{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " is evolving!"})
-		conn.WriteJSON(message{Message: "Would you like to stop the evolution?", Options: []string{"yes", "no"}})
+		conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " is evolving!"})
+		conn.WriteJSON(wsMessage{Message: "Would you like to stop the evolution?", Options: []string{"yes", "no"}})
 		mt, msg, err := conn.ReadMessage()
 		if err != nil {
 			log.Println("Failed to read message: " + err.Error())
@@ -602,7 +602,7 @@ func (cfg *apiConfig) resolveExpGains(dbPokemon database.Pokemon, pokemon *pokeb
 			continue
 		}
 		if string(msg) == "yes" {
-			conn.WriteJSON(message{Message: "Evolution stopped"})
+			conn.WriteJSON(wsMessage{Message: "Evolution stopped"})
 			continue
 		}
 
@@ -611,7 +611,7 @@ func (cfg *apiConfig) resolveExpGains(dbPokemon database.Pokemon, pokemon *pokeb
 			log.Println("Failed to get pokemon: " + err.Error())
 			continue
 		}
-		conn.WriteJSON(message{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " evolved into " + ansiiutils.StyleItalic + evolvesTo + ansiiutils.Reset + "!\n"})
+		conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + dbPokemon.Name + ansiiutils.Reset + " evolved into " + ansiiutils.StyleItalic + evolvesTo + ansiiutils.Reset + "!\n"})
 		dbPokemon.Name = evolvesTo
 
 		movesToLearn, err = cfg.pokeapiClient.GetMovesLearnedAtLvl(p.Name, int(dbPokemon.Level))
@@ -655,7 +655,7 @@ func moveLearnLoop(conn *websocket.Conn, movesToLearn map[string]pokeapi.MoveRes
 		typeIcon := pokeutils.TypeIcons[m.Type.Name]
 
 		if len(pokemon.Moves) < 4 {
-			conn.WriteJSON(message{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " learned " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset + "\n"})
+			conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " learned " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset + "\n"})
 			pokemon.Moves = append(pokemon.Moves, pokeutils.Move{
 				Name:         m.Name,
 				Accuracy:     m.Accuracy,
@@ -676,8 +676,8 @@ func moveLearnLoop(conn *websocket.Conn, movesToLearn map[string]pokeapi.MoveRes
 		}
 		forgetMoveOpts = append(forgetMoveOpts, "cancel")
 
-		conn.WriteJSON(message{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " is trying to learn " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset})
-		conn.WriteJSON(message{Message: "Select a move to" + ansiiutils.ColorRed + " forget" + ansiiutils.Reset + ":", Options: forgetMoveOpts})
+		conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " is trying to learn " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset})
+		conn.WriteJSON(wsMessage{Message: "Select a move to" + ansiiutils.ColorRed + " forget" + ansiiutils.Reset + ":", Options: forgetMoveOpts})
 		mt, msg, err := conn.ReadMessage()
 		if err != nil {
 			log.Println("Failed to read message: " + err.Error())
@@ -689,7 +689,7 @@ func moveLearnLoop(conn *websocket.Conn, movesToLearn map[string]pokeapi.MoveRes
 		}
 
 		if string(msg) == "cancel" {
-			conn.WriteJSON(message{Message: pokemon.Name + " did not learn " + ansiiutils.StyleBold + moveName + ansiiutils.Reset + "\n"})
+			conn.WriteJSON(wsMessage{Message: pokemon.Name + " did not learn " + ansiiutils.StyleBold + moveName + ansiiutils.Reset + "\n"})
 			continue
 		}
 
@@ -705,7 +705,7 @@ func moveLearnLoop(conn *websocket.Conn, movesToLearn map[string]pokeapi.MoveRes
 					EffectChance: m.EffectChance,
 					Effect:       "",
 				}
-				conn.WriteJSON(message{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " forgot " + ansiiutils.StyleBold + pokemon.Moves[i].Name + pokeutils.TypeIcons[pokemon.Moves[i].Type] + ansiiutils.Reset + " and learned " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset + "\n"})
+				conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " forgot " + ansiiutils.StyleBold + pokemon.Moves[i].Name + pokeutils.TypeIcons[pokemon.Moves[i].Type] + ansiiutils.Reset + " and learned " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset + "\n"})
 				movesChanged = true
 				break
 			}

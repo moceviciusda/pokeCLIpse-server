@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -13,33 +11,16 @@ import (
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
-func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Request, user database.User) {
-	type parameters struct {
-		Name  string `json:"name"`
-		Level int32  `json:"level"`
-		Shiny bool   `json:"shiny"`
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Println("Error reading request body: " + err.Error())
-		respondWithError(w, 400, "Error reading request body: "+err.Error())
-		return
-	}
-
-	params := parameters{}
-	err = json.Unmarshal(body, &params)
-	if err != nil {
-		log.Println("Error parsing JSON: " + err.Error())
-		respondWithError(w, 400, "Error parsing JSON: "+err.Error())
-		return
-	}
+func (cfg *apiConfig) handlerCreatePokemon(params struct {
+	Name  string `json:"name"`
+	Level int32  `json:"level"`
+	Shiny bool   `json:"shiny"`
+}, r *http.Request, user database.User) (pokeutils.Pokemon, error) {
 
 	p, err := cfg.pokeapiClient.GetPokemon(params.Name)
 	if err != nil {
 		log.Println("Error getting pokemon: " + err.Error())
-		respondWithError(w, 400, "Invalid pokemon name: "+err.Error())
-		return
+		return pokeutils.Pokemon{}, err
 	}
 
 	ivs, err := cfg.DB.CreateIVs(r.Context(), database.CreateIVsParams{
@@ -55,8 +36,7 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 	})
 	if err != nil {
 		log.Println("Error creating IVs: " + err.Error())
-		respondWithError(w, 500, "Failed to create IVs: "+err.Error())
-		return
+		return pokeutils.Pokemon{}, err
 	}
 
 	dbPokemon, err := cfg.DB.CreatePokemon(r.Context(), database.CreatePokemonParams{
@@ -72,15 +52,13 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 	})
 	if err != nil {
 		log.Println("Error creating pokemon: " + err.Error())
-		respondWithError(w, 500, "Failed to create pokemon: "+err.Error())
-		return
+		return pokeutils.Pokemon{}, err
 	}
 
 	rMoves, err := cfg.pokeapiClient.SelectRandomMoves(p.Name, int(params.Level))
 	if err != nil {
 		log.Println("Failed to get user: " + user.Username + " pokemon moves: " + err.Error())
-		respondWithError(w, 500, "Failed to get pokemon moves: "+err.Error())
-		return
+		return pokeutils.Pokemon{}, err
 	}
 
 	for _, move := range rMoves {
@@ -101,8 +79,7 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 			})
 			if err != nil {
 				log.Println("Failed to create move: " + err.Error())
-				respondWithError(w, 500, "Failed to create move: "+err.Error())
-				return
+				return pokeutils.Pokemon{}, err
 			}
 		}
 
@@ -112,15 +89,14 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 		})
 		if err != nil {
 			log.Println("Failed to create pokemon move: " + err.Error())
-			return
+			return pokeutils.Pokemon{}, err
 		}
 	}
 
 	party, err := cfg.DB.GetPokemonParty(r.Context(), user.ID)
 	if err != nil {
 		log.Println("Error getting pokemon: " + err.Error())
-		respondWithError(w, 500, "Failed to get pokemon: "+err.Error())
-		return
+		return pokeutils.Pokemon{}, err
 	}
 
 	if len(party) < 6 {
@@ -131,8 +107,7 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 		})
 		if err != nil {
 			log.Println("Failed to add pokemon to party: " + err.Error())
-			respondWithError(w, 500, "Failed to add pokemon to party: "+err.Error())
-			return
+			return pokeutils.Pokemon{}, err
 		}
 	}
 
@@ -159,7 +134,7 @@ func (cfg *apiConfig) handlerCreatePokemon(w http.ResponseWriter, r *http.Reques
 		}, int(dbPokemon.Level)),
 	}
 
-	respondWithJSON(w, 201, pokemon)
+	return pokemon, nil
 }
 
 func (cfg *apiConfig) handlerGetPokemonParty(w http.ResponseWriter, r *http.Request, user database.User) {

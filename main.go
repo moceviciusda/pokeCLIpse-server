@@ -71,13 +71,13 @@ func main() {
 
 	v1Router.Post("/users", apiCfg.handlerCreateUser)
 	v1Router.Post("/login", apiCfg.handlerLogin)
+	v1Router.Handle("/starter", apiCfg.middlewareAuth(apiCfg.handlerSelectStarterPokemon))
 
 	v1Router.Get("/location", apiCfg.middlewareAuth(apiCfg.hadlerGetUserLocation))
 	v1Router.Put("/location/next", apiCfg.middlewareAuth(apiCfg.handlerNextLocation))
 	v1Router.Put("/location/previous", apiCfg.middlewareAuth(apiCfg.handlerPreviousLocation))
 	v1Router.Handle("/location/search", apiCfg.middlewareAuth(apiCfg.handlerSearchForPokemon))
 
-	v1Router.Post("/pokemon", apiCfg.middlewareAuth(apiCfg.handlerCreatePokemon))
 	v1Router.Get("/pokemon/party", apiCfg.middlewareAuth(apiCfg.handlerGetPokemonParty))
 
 	router.Mount("/v1", v1Router)
