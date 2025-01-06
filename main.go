@@ -69,6 +69,8 @@ func main() {
 	v1Router.Get("/healthz", handlerReadiness)
 	v1Router.Get("/error", handlerError)
 
+	v1Router.HandleFunc("/battle/simulate", apiCfg.handlerSimulateBattle)
+
 	v1Router.Post("/users", apiCfg.handlerCreateUser)
 	v1Router.Post("/login", apiCfg.handlerLogin)
 	v1Router.Handle("/starter", apiCfg.middlewareAuth(apiCfg.handlerSelectStarterPokemon))
