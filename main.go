@@ -38,9 +38,9 @@ func main() {
 		log.Fatal("JWT_SECRET is not found in the environment")
 	}
 
-	dbURL := os.Getenv("DB_URL")
+	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Fatal("DB_URL is not found in the environment")
+		log.Fatal("DATABASE_URL is not found in the environment")
 	}
 
 	conn, err := sql.Open("postgres", dbURL)

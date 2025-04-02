@@ -11,7 +11,7 @@ import (
 )
 
 func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Request) {
-	log.Println("Established simulate-battle websocket connection with client: " + r.RemoteAddr)
+	log.Println("Established simulate-battle websocket connection with host: " + r.Host)
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
@@ -24,21 +24,9 @@ func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	type initMessage struct {
-		PokemonParty []pokebattle.Pokemon `json:"pokemonParty"`
-		Opponent     string               `json:"opponent"`
-	}
-
-	var initMsg initMessage
-	err = conn.ReadJSON(&initMsg)
-	if err != nil {
-		log.Println("Failed to read initial message: " + err.Error())
-		return
-	}
-
 	defer func() {
 		conn.Close()
-		log.Println("Closed simulate-battle websocket connection with client: " + r.RemoteAddr)
+		log.Println("Closed simulate-battle websocket connection with host: " + r.Host)
 	}()
 
 	pokemonParty := make([]pokebattle.Pokemon, 0, 1)
@@ -90,7 +78,7 @@ func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Reque
 	battle := pokebattle.NewBattle(
 		pokebattle.Trainer{
 			Name:    "Guest",
-			Pokemon: initMsg.PokemonParty,
+			Pokemon: pokemonParty,
 		},
 		pokebattle.Trainer{
 			Name:    "Wild",
