@@ -172,8 +172,13 @@ func (b *Battle) Run() {
 }
 
 func (b *Battle) SelectPokemon(trainer Trainer) *Pokemon {
-	options := make([]string, 0, len(trainer.Pokemon))
-	for _, p := range trainer.GetLivePokemon() {
+	livePokemon := trainer.GetLivePokemon()
+	if len(livePokemon) == 1 {
+		return &livePokemon[0]
+	}
+
+	options := make([]string, 0, len(livePokemon))
+	for _, p := range livePokemon {
 		options = append(options, p.Name)
 	}
 	b.MsgChan <- BattleMessage{Type: BattleMsgSelect, Subject: trainer.Name, Options: options}
@@ -198,7 +203,7 @@ func (b *Battle) SelectPokemon(trainer Trainer) *Pokemon {
 	// 	b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer.Name + " did not select a pokemon in time!"}
 	// }
 
-	return &trainer.Pokemon[0]
+	return &livePokemon[0]
 }
 
 func (t *Trainer) GetLivePokemon() []Pokemon {
