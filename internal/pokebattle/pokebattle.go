@@ -16,8 +16,9 @@ type Pokemon struct {
 }
 
 type Trainer struct {
-	Name          string
-	Pokemon       []Pokemon
+	Name    string
+	Pokemon []Pokemon
+
 	activePokemon *Pokemon
 	participants  []*Pokemon
 }
@@ -132,21 +133,13 @@ func (b *Battle) Run() {
 			}
 			trainer2.participants = []*Pokemon{trainer2.activePokemon}
 
-			pokemon := trainer1.GetLivePokemon()
-			for _, v := range pokemon {
-				println(v.Name, v.Stats.Hp)
-			}
-			if len(pokemon) == 0 {
+			err := b.SelectPokemon(trainer1)
+			if err != nil {
 				b.Winner = trainer2
+				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: err.Error()}
 				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " wins!"}
 				return
 			}
-
-			trainer1.activePokemon = b.SelectPokemon(*trainer1)
-			trainer1.participants = append(trainer1.participants, trainer1.activePokemon)
-
-			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " sent out " + trainer1.activePokemon.Name + "!"}
-			b.calculateTickers()
 		}
 
 		if trainer2.activePokemon.Stats.Hp <= 0 {
@@ -158,41 +151,59 @@ func (b *Battle) Run() {
 			}
 			trainer1.participants = []*Pokemon{trainer1.activePokemon}
 
-			pokemon := trainer2.GetLivePokemon()
-			if len(pokemon) == 0 {
+			err := b.SelectPokemon(trainer2)
+			if err != nil {
 				b.Winner = trainer1
+				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: err.Error()}
 				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer1.Name + " wins!"}
 				return
 			}
-
-			trainer2.activePokemon = b.SelectPokemon(*trainer2)
-			trainer2.participants = append(trainer2.participants, trainer2.activePokemon)
-
-			b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " sent out " + trainer2.activePokemon.Name + "!"}
-			b.calculateTickers()
 		}
-
 	}
 }
 
-func (b *Battle) SelectPokemon(trainer Trainer) *Pokemon {
+func (b *Battle) SelectPokemon(trainer *Trainer) error {
+
 	livePokemon := trainer.GetLivePokemon()
-	if len(livePokemon) == 1 {
-		return &livePokemon[0]
-	}
-
-	options := make([]string, 0, len(livePokemon))
+	// debugging why battle never ends
+	fmt.Println("Trainer: ", trainer.Name)
 	for _, p := range livePokemon {
-		options = append(options, p.Name)
-	}
-	b.MsgChan <- BattleMessage{Type: BattleMsgSelect, Subject: trainer.Name, Options: options}
 
-	selected := <-b.MsgChan
-	for i, p := range trainer.Pokemon {
-		if p.Name == selected.Message {
-			return &trainer.Pokemon[i]
+		fmt.Println("Live Pokemon: ", p.Name, p.Stats.Hp)
+	}
+	if len(livePokemon) == 0 {
+		return fmt.Errorf("%s has no live pokemon!", trainer.Name)
+	}
+
+	var selectedPokemon *Pokemon
+
+	if len(livePokemon) == 1 {
+		selectedPokemon = livePokemon[0]
+	} else {
+
+		options := make([]string, 0, len(livePokemon))
+		for _, p := range livePokemon {
+			options = append(options, p.Name)
+		}
+		b.MsgChan <- BattleMessage{Type: BattleMsgSelect, Subject: trainer.Name, Options: options}
+
+		selected := <-b.MsgChan
+		for i, p := range livePokemon {
+			if p.Name == selected.Message {
+				selectedPokemon = livePokemon[i]
+
+			}
 		}
 	}
+	if selectedPokemon == nil {
+		selectedPokemon = livePokemon[0]
+	}
+
+	trainer.activePokemon = selectedPokemon
+	trainer.participants = []*Pokemon{selectedPokemon}
+	b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer.Name + " sent out " + selectedPokemon.Name + "!"}
+	b.calculateTickers()
+
 	// TODO: Implement timeout for PVP battles
 
 	// select {
@@ -207,14 +218,14 @@ func (b *Battle) SelectPokemon(trainer Trainer) *Pokemon {
 	// 	b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer.Name + " did not select a pokemon in time!"}
 	// }
 
-	return &livePokemon[0]
+	return nil
 }
 
-func (t *Trainer) GetLivePokemon() []Pokemon {
-	livePokemon := make([]Pokemon, 0, len(t.Pokemon))
-	for _, p := range t.Pokemon {
-		if p.Stats.Hp > 0 {
-			livePokemon = append(livePokemon, p)
+func (t *Trainer) GetLivePokemon() []*Pokemon {
+	livePokemon := make([]*Pokemon, 0, len(t.Pokemon))
+	for i := range t.Pokemon {
+		if t.Pokemon[i].Stats.Hp > 0 {
+			livePokemon = append(livePokemon, &t.Pokemon[i])
 		}
 	}
 	return livePokemon

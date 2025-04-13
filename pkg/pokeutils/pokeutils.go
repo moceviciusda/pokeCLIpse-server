@@ -2,7 +2,6 @@ package pokeutils
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"slices"
@@ -157,10 +156,10 @@ func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourTex
 	} else {
 		adRatio = float64(attacker.Stats.SpecialAttack) / float64(defender.Stats.SpecialDefense)
 	}
-	log.Println("Attack/Defense ratio: ", adRatio)
+	// log.Println("Attack/Defense ratio: ", adRatio)
 
 	baseDamage := (float64(move.Power) * levelFactor * adRatio / 50) + 2
-	log.Println("Damage before modifiers: ", baseDamage)
+	// log.Println("Damage before modifiers: ", baseDamage)
 
 	var stab float64 = 1
 	if slices.Contains(attacker.Types, move.Type) {
@@ -184,7 +183,7 @@ func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourTex
 	}
 
 	damage := baseDamage * stab * typeEffectiveness
-	log.Println("Damage after modifiers: ", damage)
+	// log.Println("Damage after modifiers: ", damage)
 
 	return int(damage), flavourText
 }
