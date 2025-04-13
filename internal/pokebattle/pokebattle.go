@@ -163,16 +163,10 @@ func (b *Battle) Run() {
 }
 
 func (b *Battle) SelectPokemon(trainer *Trainer) error {
-
 	livePokemon := trainer.GetLivePokemon()
-	// debugging why battle never ends
-	fmt.Println("Trainer: ", trainer.Name)
-	for _, p := range livePokemon {
 
-		fmt.Println("Live Pokemon: ", p.Name, p.Stats.Hp)
-	}
 	if len(livePokemon) == 0 {
-		return fmt.Errorf("%s has no live pokemon!", trainer.Name)
+		return fmt.Errorf("%s has no live pokemon...", trainer.Name)
 	}
 
 	var selectedPokemon *Pokemon
