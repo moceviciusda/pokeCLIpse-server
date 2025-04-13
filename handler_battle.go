@@ -2,12 +2,12 @@ package main
 
 import (
 	"log"
+	"math/rand"
 	"net/http"
 
 	"github.com/gorilla/websocket"
 	"github.com/moceviciusda/pokeCLIpse-server/internal/pokebattle"
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/ansiiutils"
-	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
 func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Request) {
@@ -25,8 +25,14 @@ func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Reque
 	}
 
 	type initMessage struct {
-		PokemonParty []pokebattle.Pokemon `json:"pokemonParty"`
-		Opponent     string               `json:"opponent"`
+		Guest struct {
+			Name         string               `json:"name"`
+			PokemonParty []pokebattle.Pokemon `json:"pokemonParty"`
+		} `json:"guest"`
+		Opponent struct {
+			Name         string               `json:"name"`
+			PokemonParty []pokebattle.Pokemon `json:"pokemonParty"`
+		} `json:"opponent"`
 	}
 
 	var initMsg initMessage
@@ -41,60 +47,14 @@ func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Reque
 		log.Println("Closed simulate-battle websocket connection with client: " + r.RemoteAddr)
 	}()
 
-	pokemonParty := make([]pokebattle.Pokemon, 0, 1)
-
-	p := pokeutils.Pokemon{
-		Name:  "Pikachu",
-		Types: []string{"electric"},
-		Level: 5,
-		Stats: pokeutils.Stats{
-			Hp:             35,
-			Attack:         55,
-			Defense:        40,
-			SpecialAttack:  50,
-			SpecialDefense: 50,
-			Speed:          90,
-		},
-		Moves: []pokeutils.Move{
-			{
-				Name:         "Thunder Shock",
-				Accuracy:     100,
-				Power:        40,
-				PP:           30,
-				Type:         "electric",
-				DamageClass:  "special",
-				EffectChance: 10,
-				Effect:       "paralyze",
-			},
-			{
-				Name:         "Quick Attack",
-				Accuracy:     100,
-				Power:        40,
-				PP:           30,
-				Type:         "normal",
-				DamageClass:  "physical",
-				EffectChance: 0,
-				Effect:       "",
-			},
-		},
-	}
-
-	pokemon := pokebattle.Pokemon{
-		Pokemon: p,
-		ExpGain: 0,
-		BaseExp: 0,
-	}
-
-	pokemonParty = append(pokemonParty, pokemon)
-
 	battle := pokebattle.NewBattle(
 		pokebattle.Trainer{
-			Name:    "Guest",
-			Pokemon: initMsg.PokemonParty,
+			Name:    initMsg.Guest.Name,
+			Pokemon: initMsg.Guest.PokemonParty,
 		},
 		pokebattle.Trainer{
-			Name:    "Wild",
-			Pokemon: pokemonParty,
+			Name:    initMsg.Opponent.Name,
+			Pokemon: initMsg.Opponent.PokemonParty,
 		},
 		make(chan pokebattle.BattleMessage),
 	)
@@ -105,9 +65,9 @@ func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Reque
 		switch battleMsg.Type {
 		case pokebattle.BattleMsgInfo:
 			var color string
-			if battleMsg.Subject == "Guest" {
+			if battleMsg.Subject == initMsg.Guest.Name {
 				color = ansiiutils.ColorGreen
-			} else if battleMsg.Subject == "Wild" {
+			} else if battleMsg.Subject == initMsg.Opponent.Name {
 				color = ansiiutils.ColorRed
 			} else {
 				color = ansiiutils.ColorYellow
@@ -115,6 +75,18 @@ func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Reque
 			conn.WriteJSON(wsMessage{Message: color + battleMsg.Message + ansiiutils.Reset})
 
 		case pokebattle.BattleMsgSelect:
+			if battleMsg.Subject != initMsg.Guest.Name {
+				// randomly select a pokemon for the opponent
+				randomPokemon := rand.Intn(len(battleMsg.Options))
+
+				battle.MsgChan <- pokebattle.BattleMessage{
+					Type:    pokebattle.BattleMsgAction,
+					Message: battleMsg.Options[randomPokemon],
+					Subject: initMsg.Opponent.Name,
+				}
+				continue
+			}
+
 			conn.WriteJSON(wsMessage{Message: "Select a pokemon", Options: battleMsg.Options})
 			mt, msg, err := conn.ReadMessage()
 			if err != nil {
@@ -126,11 +98,11 @@ func (cfg *apiConfig) handlerSimulateBattle(w http.ResponseWriter, r *http.Reque
 				return
 			}
 
-			battle.MsgChan <- pokebattle.BattleMessage{Type: pokebattle.BattleMsgAction, Message: string(msg), Subject: "Guest"}
+			battle.MsgChan <- pokebattle.BattleMessage{Type: pokebattle.BattleMsgAction, Message: string(msg), Subject: initMsg.Guest.Name}
 		}
 	}
 
-	if battle.Winner.Name != "Guest" {
+	if battle.Winner.Name != initMsg.Guest.Name {
 		conn.WriteJSON(wsMessage{Message: "You lost!"})
 		return
 	}

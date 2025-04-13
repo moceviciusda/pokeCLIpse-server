@@ -695,6 +695,8 @@ func moveLearnLoop(conn *websocket.Conn, movesToLearn map[string]pokeapi.MoveRes
 
 		for i, mName := range forgetMoveOpts {
 			if mName == string(msg) {
+				conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " forgot " + ansiiutils.StyleBold + pokemon.Moves[i].Name + pokeutils.TypeIcons[pokemon.Moves[i].Type] + ansiiutils.Reset + " and learned " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset + "\n"})
+
 				pokemon.Moves[i] = pokeutils.Move{
 					Name:         m.Name,
 					Accuracy:     m.Accuracy,
@@ -705,7 +707,6 @@ func moveLearnLoop(conn *websocket.Conn, movesToLearn map[string]pokeapi.MoveRes
 					EffectChance: m.EffectChance,
 					Effect:       "",
 				}
-				conn.WriteJSON(wsMessage{Message: ansiiutils.StyleItalic + pokemon.Name + ansiiutils.Reset + " forgot " + ansiiutils.StyleBold + pokemon.Moves[i].Name + pokeutils.TypeIcons[pokemon.Moves[i].Type] + ansiiutils.Reset + " and learned " + ansiiutils.StyleBold + moveName + typeIcon + ansiiutils.Reset + "\n"})
 				movesChanged = true
 				break
 			}

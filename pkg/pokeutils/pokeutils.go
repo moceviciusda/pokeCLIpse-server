@@ -2,8 +2,10 @@ package pokeutils
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
+	"slices"
 	"strings"
 )
 
@@ -147,29 +149,27 @@ func (s Stats) String() string {
 }
 
 func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourText string) {
-	var ad float64
-	if move.DamageClass == "physical" {
-		ad = float64(attacker.Stats.Attack) / float64(defender.Stats.Defense)
-	} else {
-		ad = float64(attacker.Stats.SpecialAttack) / float64(defender.Stats.SpecialDefense)
-	}
-	// log.Println("Attack/Defense ratio: ", ad)
+	levelFactor := (2*float64(attacker.Level))/5 + 2
 
-	damage := ((float64(attacker.Level)*2/5+2)*float64(move.Power)*ad)/50 + 2
-	// log.Println("Damage before modifiers: ", damage)
+	var adRatio float64
+	if move.DamageClass == "physical" {
+		adRatio = float64(attacker.Stats.Attack) / float64(defender.Stats.Defense)
+	} else {
+		adRatio = float64(attacker.Stats.SpecialAttack) / float64(defender.Stats.SpecialDefense)
+	}
+	log.Println("Attack/Defense ratio: ", adRatio)
+
+	baseDamage := (float64(move.Power) * levelFactor * adRatio / 50) + 2
+	log.Println("Damage before modifiers: ", baseDamage)
 
 	var stab float64 = 1
-	for _, t := range attacker.Types {
-		if t == move.Type {
-			stab = 1.5
-			break
-		}
+	if slices.Contains(attacker.Types, move.Type) {
+		stab = 1.5
 	}
 
 	var typeEffectiveness float64 = 1
 	for _, t := range defender.Types {
-		te := TypeEffectiveness(move.Type, t)
-		typeEffectiveness *= te
+		typeEffectiveness *= TypeEffectiveness(move.Type, t)
 
 	}
 	switch typeEffectiveness {
@@ -183,8 +183,8 @@ func CalculateDamage(attacker, defender Pokemon, move Move) (dmg int, flavourTex
 		flavourText = "It's ultra effective!"
 	}
 
-	damage = damage * stab * typeEffectiveness
-	// log.Println("Damage after modifiers: ", damage)
+	damage := baseDamage * stab * typeEffectiveness
+	log.Println("Damage after modifiers: ", damage)
 
 	return int(damage), flavourText
 }

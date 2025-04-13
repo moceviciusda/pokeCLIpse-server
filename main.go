@@ -25,7 +25,8 @@ type apiConfig struct {
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Failed to load the environment")
+		// log.Fatal("Failed to load the environment")
+		log.Println("No .env file found, will use environment variables")
 	}
 
 	portString := os.Getenv("PORT")

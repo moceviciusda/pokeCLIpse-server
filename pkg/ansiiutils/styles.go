@@ -9,4 +9,13 @@ const (
 	StyleInverse       = "\033[7m"
 	StyleHidden        = "\033[8m"
 	StyleStrikethrough = "\033[9m"
+
+	StyleNoBold          = "\033[22m"
+	StyleNoDim           = "\033[22m"
+	StyleNoItalic        = "\033[23m"
+	StyleNoUnderline     = "\033[24m"
+	StyleNoBlink         = "\033[25m"
+	StyleNoInverse       = "\033[27m"
+	StyleNoHidden        = "\033[28m"
+	StyleNoStrikethrough = "\033[29m"
 )

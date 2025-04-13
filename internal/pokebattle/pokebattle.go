@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/moceviciusda/pokeCLIpse-server/pkg/ansiiutils"
 	"github.com/moceviciusda/pokeCLIpse-server/pkg/pokeutils"
 )
 
@@ -132,6 +133,9 @@ func (b *Battle) Run() {
 			trainer2.participants = []*Pokemon{trainer2.activePokemon}
 
 			pokemon := trainer1.GetLivePokemon()
+			for _, v := range pokemon {
+				println(v.Name, v.Stats.Hp)
+			}
 			if len(pokemon) == 0 {
 				b.Winner = trainer2
 				b.MsgChan <- BattleMessage{Type: BattleMsgInfo, Message: trainer2.Name + " wins!"}
@@ -243,7 +247,7 @@ func attack(attacker, defender *Pokemon) (string, error) {
 	}
 
 	damage, flavourText := pokeutils.CalculateDamage(attacker.Pokemon, defender.Pokemon, move)
-	msg := fmt.Sprintf("%s used %s and dealt %d damage to %s\n", attacker.Name, move.Name, damage, defender.Name)
+	msg := fmt.Sprintf("%s used %s and dealt %d damage to %s\n", ansiiutils.StyleBold+attacker.Name+ansiiutils.StyleNoBold, move.Name, damage, ansiiutils.StyleBold+defender.Name+ansiiutils.StyleNoBold)
 	if flavourText != "" {
 		msg += flavourText + "\n"
 	}
