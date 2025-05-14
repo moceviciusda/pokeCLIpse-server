@@ -1,7 +1,16 @@
 # PokéCLIpse Server
 
-Server for [PokéCLIpse](https://github.com/moceviciusda/pokeCLIpse-client), a text based online multiplayer Pokemon game with auto-battling.
-This server handles user authentication, Pokemon management, battles, and location tracking. It is built using Go and utilizes PostgreSQL for data storage.
+Text based online multiplayer Pokemon game server with auto-battling designed to be used with [PokéCLIpse Client](https://github.com/moceviciusda/pokeCLIpse-client).
+
+Server exposes an API and utilizes websockets to handle user authentication, Pokemon battle simulation, and progression system. Server is built using Go and uses PostgreSQL for persistent storage.
+
+## Table of Contents
+- [Features](#features)
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Setup](#setup)
+- [Technologies](#technologies)
+- [Deployment](#deployment)
 
 ## Features
 
@@ -38,7 +47,16 @@ JWT_SECRET=your_jwt_secret
 go build -o pokeclipse-server
 ```
 
-4. Run the application
+4. Run database migrations
+```bash
+# Install Goose to run database migrations
+go install github.com/pressly/goose/v3/cmd/goose@latest
+
+# Run migrations
+goose -dir sql/schema postgres "your_postgres_connection_string" up
+```
+
+5. Run the application
 ```bash
 ./pokeclipse-server
 ```
